@@ -1,0 +1,1978 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MedCRM — Doctors & Hospitals</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;background:#f5f6fa;color:#1a1a2e;min-height:100vh}
+:root{--blue:#2563eb;--blue-light:#eff6ff;--blue-dark:#1d4ed8;--green:#16a34a;--green-light:#f0fdf4;--amber:#d97706;--amber-light:#fffbeb;--red:#dc2626;--red-light:#fef2f2;--purple:#7c3aed;--purple-light:#f5f3ff;--gray:#64748b;--border:#e2e8f0;--sidebar-w:220px;--header-h:56px}
+#app{display:flex;height:100vh;overflow:hidden}
+#sidebar{width:var(--sidebar-w);background:#1e293b;color:#cbd5e1;display:flex;flex-direction:column;flex-shrink:0}
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+#header{height:var(--header-h);background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;gap:10px;flex-shrink:0}
+#content{flex:1;overflow-y:auto;padding:24px}
+.logo{padding:20px 16px 16px;font-size:16px;font-weight:700;color:#f1f5f9;border-bottom:1px solid #334155;letter-spacing:-.3px}
+.logo span{color:#60a5fa}
+.nav-section{padding:12px 0}
+.nav-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:#475569;padding:0 16px;margin-bottom:4px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:8px 16px;cursor:pointer;color:#94a3b8;font-size:13px;transition:all .15s;border-left:3px solid transparent;user-select:none}
+.nav-item:hover{background:#334155;color:#e2e8f0}
+.nav-item.active{background:#1e40af22;color:#60a5fa;border-left-color:#60a5fa}
+.nav-item svg{width:16px;height:16px;flex-shrink:0;opacity:.8}
+.nav-count{margin-left:auto;background:#334155;color:#94a3b8;font-size:10px;padding:1px 6px;border-radius:10px}
+.page-title{font-size:15px;font-weight:600;color:#1e293b;white-space:nowrap}
+.header-search{flex:1;max-width:300px;position:relative}
+.header-search input{width:100%;padding:7px 10px 7px 36px!important;border:1px solid var(--border);border-radius:6px;font-size:13px;background:#f8fafc;outline:none;color:#1e293b;box-sizing:border-box!important}
+.header-search input:focus{border-color:#93c5fd;background:#fff}
+.header-search svg{position:absolute;left:9px;top:50%;transform:translateY(-50%);width:14px;height:14px;color:var(--gray)}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;border:1px solid transparent;transition:all .15s;text-decoration:none;user-select:none;white-space:nowrap}
+.btn-primary{background:var(--blue);color:#fff;border-color:var(--blue-dark)}
+.btn-primary:hover{background:var(--blue-dark)}
+.btn-secondary{background:#fff;color:#374151;border-color:var(--border)}
+.btn-secondary:hover{background:#f9fafb}
+.btn-success{background:#dcfce7;color:#15803d;border-color:#86efac}
+.btn-success:hover{background:#bbf7d0}
+.btn-purple{background:#ede9fe;color:#6d28d9;border-color:#c4b5fd}
+.btn-purple:hover{background:#ddd6fe}
+.btn-sm{padding:5px 10px;font-size:12px}
+.btn-xs{padding:3px 8px;font-size:11px}
+.btn-danger{background:var(--red-light);color:var(--red);border-color:#fca5a5}
+.btn-danger:hover{background:#fee2e2}
+.ml-auto{margin-left:auto}
+
+/* Quick-add bar */
+.quick-add-bar{background:#fff;border:2px dashed #93c5fd;border-radius:10px;padding:14px 18px;margin-bottom:20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.quick-add-bar input{flex:1;min-width:200px;padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:14px;outline:none;color:#1e293b}
+.quick-add-bar input:focus{border-color:#93c5fd}
+.quick-add-bar select{padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;color:#374151;outline:none;cursor:pointer;background:#fff}
+.quick-add-hint{font-size:12px;color:var(--gray);width:100%;margin-top:-4px}
+
+/* Stats */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:24px}
+.stat-card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:4px}
+.stat-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--gray)}
+.stat-value{font-size:26px;font-weight:700;line-height:1}
+.stat-sub{font-size:11px;color:var(--gray)}
+.stat-blue{color:var(--blue)}.stat-green{color:var(--green)}.stat-amber{color:var(--amber)}.stat-purple{color:var(--purple)}
+
+/* Card */
+.card{background:#fff;border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.card-header{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.card-title{font-size:14px;font-weight:600;color:#1e293b}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th{padding:10px 16px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--gray);background:#f8fafc;border-bottom:1px solid var(--border)}
+td{padding:11px 16px;border-bottom:1px solid #f1f5f9;font-size:13px;color:#374151;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#f8fafc}
+.clickable{cursor:pointer}
+
+/* Badges */
+.badge{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:12px;white-space:nowrap}
+.badge-blue{background:#dbeafe;color:#1d4ed8}.badge-green{background:#dcfce7;color:#15803d}
+.badge-amber{background:#fef3c7;color:#b45309}.badge-red{background:#fee2e2;color:#b91c1c}
+.badge-purple{background:#ede9fe;color:#6d28d9}.badge-gray{background:#f1f5f9;color:#475569}
+.type-badge-doctor{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe}
+.type-badge-hospital{background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0}
+
+/* Pipeline */
+.pipeline-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:24px}
+.pipeline-col{background:#fff;border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.pipeline-col-header{padding:10px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border)}
+.pipeline-col-body{padding:8px;display:flex;flex-direction:column;gap:6px;min-height:80px}
+.pipeline-card{background:#f8fafc;border:1px solid var(--border);border-radius:7px;padding:8px 10px;cursor:pointer;transition:all .15s}
+.pipeline-card:hover{background:#f1f5f9;border-color:#93c5fd}
+.pipeline-card-name{font-size:12px;font-weight:600;color:#1e293b;margin-bottom:2px}
+.pipeline-card-sub{font-size:11px;color:var(--gray)}
+.pipeline-empty{font-size:11px;color:#94a3b8;text-align:center;padding:12px 8px}
+
+/* Modals */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;display:flex;align-items:flex-start;justify-content:center;padding:32px 16px;overflow-y:auto}
+.modal{background:#fff;border-radius:12px;width:100%;max-width:660px;box-shadow:0 20px 60px rgba(0,0,0,.2);margin:auto}
+.modal-header{padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.modal-title{font-size:15px;font-weight:700;color:#1e293b}
+.modal-body{padding:22px;display:flex;flex-direction:column;gap:16px}
+.modal-footer{padding:14px 22px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end}
+.close-btn{background:none;border:none;cursor:pointer;color:var(--gray);font-size:20px;line-height:1;padding:2px}
+.close-btn:hover{color:#374151}
+
+/* Forms */
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.form-group{display:flex;flex-direction:column;gap:5px}
+.form-group.full{grid-column:1/-1}
+label{font-size:12px;font-weight:600;color:#374151}
+input[type=text],input[type=email],input[type=tel],input[type=date],select,textarea{border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:13px;color:#1e293b;font-family:inherit;outline:none;background:#fff;width:100%}
+.header-search input{padding:7px 10px 7px 34px!important}
+input:focus,select:focus,textarea:focus{border-color:#93c5fd;box-shadow:0 0 0 3px #eff6ff}
+textarea{resize:vertical;min-height:80px}
+
+/* Smart paste */
+.paste-zone{border:2px dashed #c4b5fd;border-radius:8px;background:#faf5ff;padding:4px}
+.paste-zone textarea{border:none;background:transparent;min-height:120px;font-size:13px;box-shadow:none}
+.paste-zone textarea:focus{border:none;box-shadow:none}
+.parsed-preview{background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:8px}
+.parsed-row{display:flex;gap:8px;align-items:center;font-size:13px}
+.parsed-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:#15803d;width:90px;flex-shrink:0}
+.parsed-value{color:#1e293b;flex:1}
+.parsed-edit{padding:3px 8px;font-size:11px}
+
+/* Activity */
+.activity-item{display:flex;gap:14px;padding:14px 0;border-bottom:1px solid #f1f5f9}
+.activity-item:last-child{border-bottom:none}
+.activity-icon{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px}
+.activity-body{flex:1}
+.activity-contact{font-size:13px;font-weight:600;color:#1e293b;margin-bottom:2px}
+.activity-desc{font-size:13px;color:#374151}
+.activity-meta{font-size:11px;color:var(--gray);margin-top:3px}
+.act-call{background:#dbeafe;color:var(--blue)}.act-email{background:#f0fdf4;color:var(--green)}
+.act-meeting{background:#ede9fe;color:var(--purple)}.act-note{background:#fef3c7;color:var(--amber)}.act-doc{background:#fce7f3;color:#be185d}
+
+/* Detail */
+.avatar{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;flex-shrink:0;margin-bottom:14px}
+.notes-area{background:#fffbeb;border:1px solid #fde68a;border-radius:7px;padding:12px 14px;font-size:13px;color:#92400e;min-height:60px;white-space:pre-wrap;word-break:break-word;font-family:inherit}
+.tabs{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:18px}
+.tab{padding:9px 16px;font-size:13px;font-weight:500;cursor:pointer;color:var(--gray);border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .15s;user-select:none}
+.tab.active{color:var(--blue);border-bottom-color:var(--blue)}
+
+/* Filter */
+.filter-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
+.filter-select{padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:#fff;color:#374151;cursor:pointer;outline:none}
+
+/* Import */
+.import-step{background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:14px}
+.import-step-title{font-size:13px;font-weight:700;color:#1e293b;margin-bottom:8px}
+.field-map-row{display:grid;grid-template-columns:1fr 24px 1fr;gap:8px;align-items:center;margin-bottom:8px;font-size:13px}
+.field-map-arrow{text-align:center;color:var(--gray);font-size:16px}
+.csv-preview-table{width:100%;border-collapse:collapse;font-size:11px;margin-top:8px}
+.csv-preview-table th,.csv-preview-table td{padding:4px 8px;border:1px solid var(--border);text-align:left}
+.csv-preview-table th{background:#f1f5f9;font-weight:600}
+.doc-item{display:flex;align-items:center;gap:10px;padding:8px 12px;background:#f8fafc;border:1px solid var(--border);border-radius:7px;margin-bottom:6px}
+.doc-name{font-size:12px;font-weight:500;color:#1e293b;flex:1}
+.doc-size{font-size:11px;color:var(--gray)}
+
+/* Salesforce guide */
+.sf-step{display:flex;gap:12px;margin-bottom:14px;align-items:flex-start}
+.sf-step-num{width:26px;height:26px;border-radius:50%;background:var(--blue);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.sf-step-text{font-size:13px;color:#374151;line-height:1.6}
+.sf-step-text strong{color:#1e293b}
+.code-pill{background:#1e293b;color:#e2e8f0;font-family:monospace;font-size:12px;padding:2px 8px;border-radius:4px}
+
+/* Empty */
+.empty{text-align:center;padding:48px 24px;color:var(--gray)}
+.empty-icon{font-size:36px;margin-bottom:12px}
+.empty-title{font-size:14px;font-weight:600;color:#374151;margin-bottom:6px}
+.empty-sub{font-size:13px}
+
+/* Toast */
+#toast{position:fixed;bottom:24px;right:24px;background:#1e293b;color:#f1f5f9;padding:12px 18px;border-radius:8px;font-size:13px;z-index:999;transform:translateY(80px);opacity:0;transition:all .25s;pointer-events:none;max-width:320px}
+#toast.show{transform:none;opacity:1}
+
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}
+/* Specialty color classes */
+.spec-red{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5}
+.spec-blue{background:#dbeafe;color:#1e40af;border:1px solid #93c5fd}
+.spec-purple{background:#ede9fe;color:#5b21b6;border:1px solid #c4b5fd}
+.spec-pink{background:#fce7f3;color:#9d174d;border:1px solid #f9a8d4}
+.spec-teal{background:#ccfbf1;color:#0f766e;border:1px solid #5eead4}
+.spec-green{background:#dcfce7;color:#166534;border:1px solid #86efac}
+.spec-amber{background:#fef3c7;color:#92400e;border:1px solid #fcd34d}
+.spec-orange{background:#ffedd5;color:#9a3412;border:1px solid #fdba74}
+.spec-gray{background:#f1f5f9;color:#374151;border:1px solid #cbd5e1}
+.spec-sky{background:#e0f2fe;color:#0c4a6e;border:1px solid #7dd3fc}
+.spec-violet{background:#f3e8ff;color:#6b21a8;border:1px solid #d8b4fe}
+.spec-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:3px 9px;border-radius:12px;white-space:nowrap}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+
+<!-- LOGIN OVERLAY -->
+<div id="login-overlay" style="position:fixed;inset:0;background:linear-gradient(135deg,#1e3a5f 0%,#0f172a 100%);display:flex;align-items:center;justify-content:center;z-index:9999">
+  <div style="background:#fff;border-radius:16px;padding:40px 36px;width:360px;box-shadow:0 24px 64px rgba(0,0,0,.4)">
+    <div style="text-align:center;margin-bottom:28px">
+      <div style="font-size:28px;font-weight:800;color:#1e3a5f">Med<span style="color:#2563eb">CRM</span></div>
+      <div style="font-size:13px;color:#64748b;margin-top:4px">Team access — sign in to continue</div>
+    </div>
+    <div id="login-error" style="display:none;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:10px 12px;font-size:13px;color:#dc2626;margin-bottom:16px"></div>
+    <div style="margin-bottom:14px">
+      <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:5px">Email</label>
+      <input type="email" id="login-email" placeholder="you@remoteicu.com" style="width:100%;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;outline:none" onkeydown="if(event.key==='Enter')document.getElementById('login-pass').focus()">
+    </div>
+    <div style="margin-bottom:20px">
+      <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:5px">Password</label>
+      <input type="password" id="login-pass" placeholder="••••••••" style="width:100%;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;outline:none" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button onclick="doLogin()" id="login-btn" style="width:100%;padding:11px;background:#2563eb;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">Sign In</button>
+    <div style="text-align:center;margin-top:16px">
+      <a href="#" onclick="showSignup()" style="font-size:12px;color:#2563eb;text-decoration:none">New team member? Create account</a>
+    </div>
+    <div id="signup-section" style="display:none;border-top:1px solid #e2e8f0;margin-top:20px;padding-top:20px">
+      <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:12px">Create Account</div>
+      <input type="text" id="signup-name" placeholder="Your name" style="width:100%;padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;outline:none;margin-bottom:8px">
+      <input type="email" id="signup-email" placeholder="Email" style="width:100%;padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;outline:none;margin-bottom:8px">
+      <input type="password" id="signup-pass2" placeholder="Password (min 6 chars)" style="width:100%;padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;outline:none;margin-bottom:12px">
+      <button onclick="doSignup()" style="width:100%;padding:9px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">Create Account</button>
+    </div>
+  </div>
+</div>
+
+<div id="app" style="visibility:hidden">
+  <nav id="sidebar">
+    <div class="logo">Med<span>CRM</span></div>
+    <div class="nav-section">
+      <div class="nav-label">Main</div>
+      <div class="nav-item active" onclick="showView('dashboard')" id="nav-dashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Dashboard
+      </div>
+      <div class="nav-item" onclick="showView('contacts')" id="nav-contacts">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Contacts
+        <span class="nav-count" id="nav-count-contacts">0</span>
+      </div>
+      <div class="nav-item" onclick="showView('orgs')" id="nav-orgs">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Organizations
+        <span class="nav-count" id="nav-count-orgs">0</span>
+      </div>
+      <div class="nav-item" onclick="showView('pipeline')" id="nav-pipeline">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Pipeline
+      </div>
+      <div class="nav-item" onclick="showView('activity')" id="nav-activity">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Activity Log
+      </div>
+    </div>
+    <div class="nav-section" style="border-top:1px solid #334155">
+      <div class="nav-label">Tools</div>
+      <div class="nav-item" onclick="showView('dedup')" id="nav-dedup">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
+        Find Duplicates
+        <span class="nav-count" id="nav-count-dups" style="background:#dc2626;color:#fff">0</span>
+      </div>
+      <div class="nav-label" style="margin-top:8px">Import</div>
+      <div class="nav-item" onclick="openModal('import-modal')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Import CSV / Excel
+      </div>
+      <div class="nav-item" onclick="openModal('sf-guide-modal')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Import from Salesforce
+      </div>
+    </div>
+    <div style="padding:12px 16px;margin-top:auto;border-top:1px solid #334155">
+      <div style="font-size:11px;color:#94a3b8;margin-bottom:8px" id="sidebar-user-email"></div>
+      <button onclick="doLogout()" style="width:100%;padding:7px;background:#334155;color:#94a3b8;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;text-align:left">⬡ Sign Out</button>
+    </div>
+  </nav>
+
+  <div id="main">
+    <div id="header">
+      <div class="page-title" id="page-title">Dashboard</div>
+      <div class="header-search" style="margin-left:16px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="global-search" placeholder="Search contacts…" oninput="handleGlobalSearch(this.value)" />
+      </div>
+      <div class="ml-auto" style="display:flex;gap:8px">
+        <button class="btn btn-purple" onclick="openPasteModal()">✨ Smart Paste</button>
+        <button class="btn btn-primary" onclick="openAddContact()">+ Add Contact</button>
+        <button class="btn btn-secondary" onclick="exportCSV()" title="Export all contacts to CSV">↓ Export</button>
+      </div>
+    </div>
+    <div id="content"></div>
+  </div>
+</div>
+
+<!-- ═══════════ ADD/EDIT CONTACT MODAL ═══════════ -->
+<div id="contact-modal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-title">Add Contact</div>
+      <button class="close-btn" onclick="closeModal('contact-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-id">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Type *</label>
+          <select id="f-type"><option value="doctor">Doctor / Physician</option><option value="hospital">Hospital / Health System</option></select>
+        </div>
+        <div class="form-group">
+          <label>Pipeline Stage</label>
+          <select id="f-stage">
+            <option>Prospect</option><option>Reached Out</option><option>Meeting Scheduled</option>
+            <option>Proposal Sent</option><option>Negotiating</option><option>Signed</option><option>Not Interested</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Name *</label>
+          <input type="text" id="f-name" placeholder="Dr. Jane Smith or Metro Hospital">
+        </div>
+        <div class="form-group">
+          <label>Job Title / Role</label>
+          <input type="text" id="f-jobtitle" placeholder="CEO, CMO, Chief of Medicine…">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Medical Specialty</label>
+          <select id="f-specialty"><option value="">— Select specialty —</option></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Organization / Hospital</label>
+          <input type="text" id="f-org" placeholder="Mount Sinai Medical Center">
+        </div>
+        <div class="form-group">
+          <label>Phone</label>
+          <input type="tel" id="f-phone" placeholder="(555) 123-4567">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" id="f-email" placeholder="jane.smith@hospital.com">
+        </div>
+        <div class="form-group">
+          <label>City / State</label>
+          <input type="text" id="f-location" placeholder="New York, NY">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Referral / Introduced By</label>
+          <input type="text" id="f-referral" placeholder="Who connected you?">
+        </div>
+        <div class="form-group">
+          <label>Follow-Up Date</label>
+          <input type="date" id="f-followup">
+        </div>
+      </div>
+      <div class="form-group full">
+        <label>Notes</label>
+        <textarea id="f-notes" placeholder="Key details, interests, concerns, what was discussed…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('contact-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveContact()">Save Contact</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ SMART PASTE MODAL ═══════════ -->
+<div id="paste-modal" class="modal-overlay hidden">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <div class="modal-title">✨ Smart Paste</div>
+      <button class="close-btn" onclick="closeModal('paste-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--gray);margin-bottom:4px">Paste anything — an email signature, LinkedIn bio, business card text, or a list of details. MedCRM will extract the info automatically.</p>
+      <div class="paste-zone">
+        <textarea id="paste-input" placeholder="Paste contact info here…
+
+Example:
+Dr. Sarah Johnson, MD
+Chief of Cardiology
+New York Presbyterian Hospital
+sjohnson@nyp.org | (212) 555-0198
+Manhattan, NY
+Referred by Dr. Marcus Lee" oninput="runSmartParse()"></textarea>
+      </div>
+      <div id="parse-preview" class="hidden"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('paste-modal')">Cancel</button>
+      <button class="btn btn-primary" id="paste-use-btn" onclick="useParsedData()" disabled>Use This Info →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ ACTIVITY MODAL ═══════════ -->
+<div id="activity-modal" class="modal-overlay hidden">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <div class="modal-title">Log Activity</div>
+      <button class="close-btn" onclick="closeModal('activity-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="act-contact-id">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Type *</label>
+          <select id="act-type">
+            <option value="call">📞 Phone Call</option>
+            <option value="email">✉️ Email</option>
+            <option value="meeting">🤝 Meeting</option>
+            <option value="note">📝 Note</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Date *</label>
+          <input type="date" id="act-date">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Description *</label>
+        <textarea id="act-desc" placeholder="What happened? What was discussed? Any follow-up needed?"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('activity-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveActivity()">Log Activity</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ CONTACT DETAIL MODAL ═══════════ -->
+<div id="detail-modal" class="modal-overlay hidden">
+  <div class="modal" style="max-width:780px">
+    <div class="modal-header">
+      <div class="modal-title" id="detail-modal-title">Contact Details</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-secondary btn-sm" id="edit-from-detail-btn">✏️ Edit</button>
+        <button class="close-btn" onclick="closeModal('detail-modal')">✕</button>
+      </div>
+    </div>
+    <div class="modal-body" id="detail-modal-body" style="gap:0;padding:0"></div>
+  </div>
+</div>
+
+<!-- ═══════════ IMPORT CSV MODAL ═══════════ -->
+<div id="import-modal" class="modal-overlay hidden">
+  <div class="modal" style="max-width:700px">
+    <div class="modal-header">
+      <div class="modal-title">📥 Import Contacts from CSV / Excel</div>
+      <button class="close-btn" onclick="closeModal('import-modal')">✕</button>
+    </div>
+    <div class="modal-body" id="import-modal-body">
+      <div class="import-step">
+        <div class="import-step-title">Step 1 — Select your file</div>
+        <p style="font-size:13px;color:var(--gray);margin-bottom:12px">Upload a CSV file exported from Salesforce, Excel, or any spreadsheet. Excel files: save as CSV first (File → Save As → CSV).</p>
+        <label class="btn btn-primary" style="cursor:pointer;width:fit-content">
+          📂 Choose CSV File
+          <input type="file" accept=".csv,.txt,.xlsx,.xls" style="display:none" onchange="loadFile(event)">
+        </label>
+        <div id="csv-status" style="font-size:13px;color:var(--gray);margin-top:10px"></div>
+      </div>
+      <div id="import-mapping-section" class="hidden">
+        <div class="import-step">
+          <div class="import-step-title">Step 2 — Map columns</div>
+          <p style="font-size:13px;color:var(--gray);margin-bottom:12px">Match your file's columns to MedCRM fields. Skip any column that doesn't apply.</p>
+          <div id="field-mapping"></div>
+        </div>
+        <div class="import-step">
+          <div class="import-step-title">Step 3 — Preview (first 3 rows)</div>
+          <div id="csv-preview" style="overflow-x:auto"></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('import-modal')">Cancel</button>
+      <button class="btn btn-success" id="do-import-btn" onclick="doImport()" class="hidden" style="display:none">✓ Import Contacts</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ SALESFORCE GUIDE MODAL ═══════════ -->
+<div id="sf-guide-modal" class="modal-overlay hidden">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <div class="modal-title">Import from Salesforce</div>
+      <button class="close-btn" onclick="closeModal('sf-guide-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--gray);margin-bottom:16px">Follow these steps to export your contacts from Salesforce and import them here in one click.</p>
+      <div class="sf-step"><div class="sf-step-num">1</div><div class="sf-step-text">In Salesforce, click the <strong>App Launcher</strong> (grid icon, top left) and open <strong>Contacts</strong> or <strong>Accounts</strong>.</div></div>
+      <div class="sf-step"><div class="sf-step-num">2</div><div class="sf-step-text">Click the <strong>list view</strong> you want to export (e.g. "All Contacts"). Then click the <strong>gear icon ⚙️</strong> → <strong>Export</strong>.</div></div>
+      <div class="sf-step"><div class="sf-step-num">3</div><div class="sf-step-text">Choose <strong>Export as CSV</strong>. Make sure these fields are included: <span class="code-pill">First Name</span> <span class="code-pill">Last Name</span> <span class="code-pill">Email</span> <span class="code-pill">Phone</span> <span class="code-pill">Account Name</span> <span class="code-pill">Title</span> <span class="code-pill">Mailing City</span> <span class="code-pill">Mailing State</span></div></div>
+      <div class="sf-step"><div class="sf-step-num">4</div><div class="sf-step-text">Save the CSV file to your computer.</div></div>
+      <div class="sf-step"><div class="sf-step-num">5</div><div class="sf-step-text">Come back here and click <strong>"Import CSV / Excel"</strong> in the left sidebar. MedCRM will auto-detect Salesforce column names and map them for you.</div></div>
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:14px;font-size:13px;color:#1e40af;margin-top:4px">
+        💡 <strong>Tip:</strong> MedCRM auto-recognizes standard Salesforce column names like "First Name", "Last Name", "Account Name", "Mobile", etc. — no manual mapping needed for standard exports.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('sf-guide-modal')">Close</button>
+      <button class="btn btn-primary" onclick="closeModal('sf-guide-modal');openModal('import-modal')">→ Go to Import</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<script>
+// ══════════════════════════════════════════════
+// DATA LAYER
+// ══════════════════════════════════════════════
+const STAGES=['Prospect','Reached Out','Meeting Scheduled','Proposal Sent','Negotiating','Signed','Not Interested'];
+const STAGE_COLORS={'Prospect':'badge-gray','Reached Out':'badge-blue','Meeting Scheduled':'badge-purple','Proposal Sent':'badge-amber','Negotiating':'badge-amber','Signed':'badge-green','Not Interested':'badge-red'};
+const ACT_ICONS={call:'📞',email:'✉️',meeting:'🤝',note:'📝',doc:'📎'};
+const ACT_CLASSES={call:'act-call',email:'act-email',meeting:'act-meeting',note:'act-note',doc:'act-doc'};
+// Specialties: [name, color-class, emoji, description]
+const SPECIALTIES_DEF=[
+  // Critical / Hospital-based (most relevant to RICU)
+  ['Intensivist','spec-red','🏥','ICU / Critical Care'],
+  ['Hospitalist','spec-blue','🏨','Hospital Medicine'],
+  ['Pulmonologist','spec-teal','🫁','Pulmonology / Respiratory'],
+  ['Critical Care','spec-red','⚕️','Critical Care Medicine'],
+  // Neurology family
+  ['Neurologist','spec-purple','🧠','Neurology'],
+  ['Neurosurgeon','spec-purple','🔬','Neurosurgery'],
+  ['Neuro-Intensivist','spec-purple','🧠','Neurocritical Care'],
+  // Cardiology family
+  ['Cardiologist','spec-pink','❤️','Cardiology'],
+  ['Interventional Cardiologist','spec-pink','🫀','Interventional Cardiology'],
+  ['Cardiac Surgeon','spec-pink','💉','Cardiac Surgery'],
+  // Emergency / Acute
+  ['Emergency Medicine','spec-amber','🚨','EM / Trauma'],
+  ['Trauma Surgeon','spec-amber','🏥','Trauma Surgery'],
+  ['Acute Care Surgeon','spec-amber','⚕️','Acute Care Surgery'],
+  // Surgery
+  ['General Surgeon','spec-orange','🔪','General Surgery'],
+  ['Orthopedic Surgeon','spec-orange','🦴','Orthopedics'],
+  ['Neurosurgery PA','spec-purple','📋','Neurosurgery PA/NP'],
+  // Medicine subspecialties
+  ['Oncologist','spec-green','🎗️','Oncology / Cancer'],
+  ['Hematologist','spec-green','🩸','Hematology'],
+  ['Infectious Disease','spec-teal','🦠','Infectious Disease'],
+  ['Nephrologist','spec-blue','🫘','Nephrology / Kidneys'],
+  ['Gastroenterologist','spec-green','🫀','GI / Gastroenterology'],
+  ['Endocrinologist','spec-teal','⚗️','Endocrinology'],
+  ['Rheumatologist','spec-blue','🦴','Rheumatology'],
+  ['Geriatrician','spec-gray','👴','Geriatrics'],
+  // Surgical subspecialties
+  ['Anesthesiologist','spec-gray','💊','Anesthesiology'],
+  ['Radiologist','spec-gray','🩻','Radiology'],
+  ['Interventional Radiologist','spec-gray','🩻','Interventional Radiology'],
+  // Primary Care
+  ['Internal Medicine','spec-blue','🩺','Internal Medicine'],
+  ['Family Medicine','spec-blue','👨‍👩‍👧','Family Medicine'],
+  ['Pediatrician','spec-sky','👶','Pediatrics'],
+  ['PICU Physician','spec-sky','👶','Pediatric ICU'],
+  // Other
+  ['Psychiatrist','spec-violet','🧩','Psychiatry'],
+  ['Dermatologist','spec-gray','🔬','Dermatology'],
+  ['Urologist','spec-gray','🩺','Urology'],
+  ['Ophthalmologist','spec-gray','👁️','Ophthalmology'],
+  ['OB/GYN','spec-pink','👩‍⚕️','Obstetrics & Gynecology'],
+  ['NP / APRN','spec-sky','📋','Nurse Practitioner'],
+  ['Physician Assistant','spec-sky','📋','PA-C'],
+  ['Other','spec-gray','⚕️','Other Specialty'],
+];
+const SPECIALTIES=SPECIALTIES_DEF.map(s=>s[0]);
+const SPEC_COLOR=Object.fromEntries(SPECIALTIES_DEF.map(([n,c])=>[n,c]));
+const SPEC_EMOJI=Object.fromEntries(SPECIALTIES_DEF.map(([n,,e])=>[n,e]));
+const SPEC_DESC=Object.fromEntries(SPECIALTIES_DEF.map(([n,,,d])=>[n,d]));
+
+// ── FIREBASE CONFIG ── paste your firebaseConfig values here ──
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCATw5xOArqBfxVaAH-H652ey_cp6AKCKQ",
+  authDomain: "medcrm-2126a.firebaseapp.com",
+  databaseURL: "https://medcrm-2126a-default-rtdb.firebaseio.com",
+  projectId: "medcrm-2126a",
+  storageBucket: "medcrm-2126a.firebasestorage.app",
+  messagingSenderId: "460561430771",
+  appId: "1:460561430771:web:6276f92f04d0592e545f86"
+};
+firebase.initializeApp(FIREBASE_CONFIG);
+const _auth = firebase.auth();
+const _db   = firebase.database();
+
+let contacts=[], activities=[], documents=[];
+let _dupCache=null;
+function invalidateCache(){_dupCache=null;}
+
+function saveAll(){
+  _db.ref('contacts').set(contacts);
+  _db.ref('activities').set(activities);
+  _db.ref('documents').set(documents);
+  invalidateCache();
+}
+
+// Auth helpers
+function doLogin(){
+  const email=document.getElementById('login-email').value.trim();
+  const pass=document.getElementById('login-pass').value;
+  const btn=document.getElementById('login-btn');
+  const err=document.getElementById('login-error');
+  err.style.display='none';
+  btn.textContent='Signing in…';btn.disabled=true;
+  _auth.signInWithEmailAndPassword(email,pass)
+    .catch(e=>{err.textContent=e.message;err.style.display='';btn.textContent='Sign In';btn.disabled=false;});
+}
+function showSignup(){document.getElementById('signup-section').style.display='';}
+function doSignup(){
+  const name=document.getElementById('signup-name').value.trim();
+  const email=document.getElementById('signup-email').value.trim();
+  const pass=document.getElementById('signup-pass2').value;
+  const err=document.getElementById('login-error');
+  err.style.display='none';
+  _auth.createUserWithEmailAndPassword(email,pass)
+    .then(u=>u.user.updateProfile({displayName:name}))
+    .catch(e=>{err.textContent=e.message;err.style.display='';});
+}
+function doLogout(){_auth.signOut();}
+
+// On auth state change — load data then render
+_auth.onAuthStateChanged(async user=>{
+  if(!user){
+    document.getElementById('login-overlay').style.display='flex';
+    document.getElementById('app').style.visibility='hidden';
+    return;
+  }
+  document.getElementById('login-overlay').style.display='none';
+  document.getElementById('app').style.visibility='visible';
+  const el=document.getElementById('sidebar-user-email');
+  if(el) el.textContent=user.email;
+
+  // Load from Firebase
+  const [cSnap,aSnap,dSnap]=await Promise.all([
+    _db.ref('contacts').once('value'),
+    _db.ref('activities').once('value'),
+    _db.ref('documents').once('value')
+  ]);
+  contacts  = cSnap.val() || [];
+  activities= aSnap.val() || [];
+  documents = dSnap.val() || [];
+
+  // One-time migration: if Firebase is empty, upload from localStorage
+  if(!contacts.length){
+    const lc=localStorage.getItem('medcrm2_contacts');
+    if(lc){ try{ contacts=JSON.parse(lc)||[]; }catch{} }
+    const la=localStorage.getItem('medcrm2_activities');
+    if(la){ try{ activities=JSON.parse(la)||[]; }catch{} }
+    const ld=localStorage.getItem('medcrm2_documents');
+    if(ld){ try{ documents=JSON.parse(ld)||[]; }catch{} }
+    if(contacts.length){ saveAll(); toast(`✅ Migrated ${contacts.length} contacts to cloud`); }
+  }
+
+  // Run migrations then render
+  runMigrations();
+  render();
+});
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
+
+// ══════════════════════════════════════════════
+// NAVIGATION
+// ══════════════════════════════════════════════
+let currentView='dashboard';
+let searchQuery='';
+let filterType='all',filterStage='all',filterSpec='all',sortBy='name';
+let contactsPage=0,orgsPage=0;
+const PAGE_SIZE=100,ORGS_PAGE_SIZE=50;
+
+function showView(v){
+  currentView=v;
+  document.querySelectorAll('.nav-item').forEach(el=>el.classList.remove('active'));
+  document.getElementById('nav-'+v)?.classList.add('active');
+  const titles={dashboard:'Dashboard',contacts:'Contacts',pipeline:'Pipeline',activity:'Activity Log'};
+  document.getElementById('page-title').textContent=titles[v]||v;
+  document.getElementById('global-search').value='';
+  searchQuery='';
+  render();
+}
+function render(){
+  updateNavCounts();
+  if(currentView==='dashboard') renderDashboard();
+  else if(currentView==='contacts') renderContacts();
+  else if(currentView==='orgs') renderOrganizations();
+  else if(currentView==='pipeline') renderPipeline();
+  else if(currentView==='activity') renderActivity();
+  else if(currentView==='dedup') renderDedup();
+}
+function updateNavCounts(){
+  document.getElementById('nav-count-contacts').textContent=contacts.length;
+  const orgCount=new Set(contacts.map(c=>c.org).filter(o=>o&&!isUnspecifiedOrg(o))).size;
+  document.getElementById('nav-count-orgs').textContent=orgCount;
+  // Use cached dup count — recalculated only after saves, not on every nav click
+  if(_dupCache===null) _dupCache=findDuplicateGroups();
+  const dupCount=_dupCache.length;
+  const dupEl=document.getElementById('nav-count-dups');
+  if(dupEl){dupEl.textContent=dupCount;dupEl.style.display=dupCount?'':'none';}
+}
+
+function normalize(s){return(s||'').toLowerCase().replace(/\s+/g,' ').trim();}
+function isUnspecifiedOrg(org){
+  const o=(org||'').toLowerCase().trim();
+  return !o||o==='unspecified'||o==='n/a'||o==='none'||o==='na'||o==='-'||o==='unknown'||o==='tbd';
+}
+
+function findDuplicateGroups(){
+  const groups=[];
+  const used=new Set();
+  for(let i=0;i<contacts.length;i++){
+    if(used.has(contacts[i].id)) continue;
+    const a=contacts[i];
+    const aName=normalize(a.name);
+    const aEmail=normalize(a.email);
+    const matches=[a];
+    for(let j=i+1;j<contacts.length;j++){
+      if(used.has(contacts[j].id)) continue;
+      const b=contacts[j];
+      const bName=normalize(b.name);
+      const bEmail=normalize(b.email);
+      const sameEmail=aEmail&&bEmail&&aEmail===bEmail;
+      const sameName=aName&&bName&&aName===bName;
+      const similarName=aName&&bName&&aName.length>4&&(aName.includes(bName)||bName.includes(aName));
+      if(sameEmail||sameName||similarName){matches.push(b);used.add(b.id);}
+    }
+    if(matches.length>1){
+      matches.forEach(m=>used.add(m.id));
+      groups.push(matches);
+    }
+  }
+  return groups;
+}
+function handleGlobalSearch(val){
+  searchQuery=val.toLowerCase();
+  contactsPage=0;orgsPage=0;
+  if(currentView==='contacts') renderContacts();
+  else{currentView='contacts';document.querySelector('#nav-contacts').classList.add('active');document.querySelectorAll('.nav-item').forEach(el=>el!==document.querySelector('#nav-contacts')&&el.classList.remove('active'));document.getElementById('page-title').textContent='Contacts';renderContacts();}
+}
+
+// ══════════════════════════════════════════════
+// DASHBOARD
+// ══════════════════════════════════════════════
+function renderDashboard(){
+  const total=contacts.length,signed=contacts.filter(c=>c.stage==='Signed').length;
+  const hospitals=contacts.filter(c=>c.type==='hospital').length,doctors=contacts.filter(c=>c.type==='doctor').length;
+  const activeStages=['Reached Out','Meeting Scheduled','Proposal Sent','Negotiating'];
+  const active=contacts.filter(c=>activeStages.includes(c.stage)).length;
+  const prospects=contacts.filter(c=>c.stage==='Prospect').length;
+  const today=new Date().toISOString().slice(0,10);
+  const followups=contacts.filter(c=>c.followup&&c.followup<=today&&c.stage!=='Signed');
+  const stageCounts={};STAGES.forEach(s=>{stageCounts[s]=contacts.filter(c=>c.stage===s).length});
+  const recentActs=[...activities].sort((a,b)=>b.created-a.created).slice(0,8);
+
+  document.getElementById('content').innerHTML=`
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-label">Total Contacts</div><div class="stat-value stat-blue">${total}</div><div class="stat-sub">${doctors} doctors · ${hospitals} hospitals</div></div>
+      <div class="stat-card"><div class="stat-label">Prospects</div><div class="stat-value stat-gray">${prospects}</div><div class="stat-sub">Not yet contacted</div></div>
+      <div class="stat-card"><div class="stat-label">Active Pipeline</div><div class="stat-value stat-amber">${active}</div><div class="stat-sub">Reached Out → Negotiating</div></div>
+      <div class="stat-card"><div class="stat-label">Signed</div><div class="stat-value stat-green">${signed}</div><div class="stat-sub">${total?Math.round(signed/total*100):0}% conversion rate</div></div>
+      <div class="stat-card"><div class="stat-label">Follow-ups Due</div><div class="stat-value stat-purple">${followups.length}</div><div class="stat-sub">Today or overdue</div></div>
+    </div>
+
+    ${followups.length?`<div class="card" style="margin-bottom:20px;border-color:#fca5a5">
+      <div class="card-header" style="background:#fff5f5"><div class="card-title" style="color:var(--red)">⚠️ Follow-ups Due (${followups.length})</div></div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Name</th><th>Type</th><th>Stage</th><th>Due</th><th></th></tr></thead>
+        <tbody>${followups.map(c=>`<tr class="clickable" onclick="openDetail('${c.id}')">
+          <td><strong>${escHtml(c.name)}</strong>${c.org?`<div style="font-size:11px;color:var(--gray)">${escHtml(c.org)}</div>`:''}
+          </td><td><span class="badge type-badge-${c.type}">${c.type==='doctor'?'Doctor':'Hospital'}</span></td>
+          <td><span class="badge ${STAGE_COLORS[c.stage]||'badge-gray'}">${c.stage}</span></td>
+          <td style="color:var(--red);font-weight:600">${formatDate(c.followup)}</td>
+          <td onclick="event.stopPropagation()"><button class="btn btn-secondary btn-sm" onclick="openLogActivity('${c.id}')">Log Activity</button></td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+    </div>`:''}
+
+    <div style="display:grid;grid-template-columns:1fr 1.6fr;gap:20px;margin-bottom:20px">
+      <div class="card">
+        <div class="card-header"><div class="card-title">Pipeline Breakdown</div></div>
+        <div style="padding:14px 18px;display:flex;flex-direction:column;gap:10px">
+          ${STAGES.map(s=>`<div style="display:flex;align-items:center;gap:10px">
+            <div style="font-size:12px;color:#374151;width:128px;flex-shrink:0">${s}</div>
+            <div style="flex:1;background:#f1f5f9;border-radius:4px;height:8px;overflow:hidden">
+              <div style="height:100%;background:${stageColor(s)};width:${total?Math.round(stageCounts[s]/total*100):0}%;border-radius:4px;transition:width .4s"></div>
+            </div>
+            <div style="font-size:12px;font-weight:600;color:#374151;width:18px;text-align:right">${stageCounts[s]}</div>
+          </div>`).join('')}
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title">Recent Activity</div><button class="btn btn-secondary btn-sm ml-auto" onclick="showView('activity')">View all</button></div>
+        <div style="padding:0 18px">
+          ${recentActs.length?recentActs.map(a=>{
+            const c=contacts.find(x=>x.id===a.contactId);
+            return `<div class="activity-item">
+              <div class="activity-icon ${ACT_CLASSES[a.type]||'act-note'}">${ACT_ICONS[a.type]||'📝'}</div>
+              <div class="activity-body">
+                <div class="activity-contact clickable" onclick="openDetail('${a.contactId}')">${c?escHtml(c.name):'Unknown'}</div>
+                <div class="activity-desc">${escHtml(a.desc)}</div>
+                <div class="activity-meta">${formatDate(a.date)} · ${a.type}</div>
+              </div>
+            </div>`;
+          }).join(''):`<div class="empty" style="padding:24px"><div class="empty-icon">🕐</div><div class="empty-sub">No activity logged yet</div></div>`}
+        </div>
+      </div>
+    </div>
+    ${total>0?(()=>{
+      // Only count known medical specialties (not job titles)
+      const knownSpecs=new Set(SPECIALTIES);
+      const specCounts={};
+      contacts.forEach(c=>{if(c.specialty&&knownSpecs.has(c.specialty)){specCounts[c.specialty]=(specCounts[c.specialty]||0)+1;}});
+      const sorted=Object.entries(specCounts).sort((a,b)=>b[1]-a[1]);
+      // Job title breakdown
+      const titleCounts={};
+      contacts.forEach(c=>{if(c.jobtitle){const t=c.jobtitle.trim();if(t)titleCounts[t]=(titleCounts[t]||0)+1;}});
+      const topTitles=Object.entries(titleCounts).sort((a,b)=>b[1]-a[1]).slice(0,20);
+      return `
+        ${sorted.length?`<div class="card" style="margin-bottom:20px">
+          <div class="card-header"><div class="card-title">Contacts by Medical Specialty</div><button class="btn btn-secondary btn-sm ml-auto" onclick="showView('contacts')">View all</button></div>
+          <div style="padding:14px 18px;display:flex;flex-wrap:wrap;gap:8px">
+            ${sorted.map(([s,n])=>`<div onclick="filterSpec='${s}';showView('contacts')" style="cursor:pointer;display:flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px 12px" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='#f8fafc'">
+              ${specBadge(s)}<span style="font-size:13px;font-weight:700;color:#1e293b">${n}</span>
+            </div>`).join('')}
+          </div>
+        </div>`:''}
+        ${topTitles.length?`<div class="card" style="margin-bottom:20px">
+          <div class="card-header"><div class="card-title">Contacts by Job Title</div></div>
+          <div style="padding:14px 18px;display:flex;flex-wrap:wrap;gap:8px">
+            ${topTitles.map(([t,n])=>`<div style="display:flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:7px 12px">
+              <span style="font-size:12px;color:#374151">${escHtml(t)}</span>
+              <span style="font-size:13px;font-weight:700;color:#1e293b">${n}</span>
+            </div>`).join('')}
+          </div>
+        </div>`:''}`;
+    })():''}
+    ${total===0?`<div class="card"><div style="padding:40px;text-align:center">
+      <div style="font-size:40px;margin-bottom:12px">👋</div>
+      <div style="font-size:16px;font-weight:700;color:#1e293b;margin-bottom:8px">Welcome to MedCRM!</div>
+      <div style="font-size:13px;color:var(--gray);max-width:360px;margin:0 auto 20px">Add your first contact by clicking <strong>+ Add Contact</strong>, use <strong>✨ Smart Paste</strong> to paste a bio or email signature, or <strong>Import</strong> from Salesforce.</div>
+      <div style="display:flex;gap:10px;justify-content:center">
+        <button class="btn btn-purple" onclick="openPasteModal()">✨ Smart Paste</button>
+        <button class="btn btn-primary" onclick="openAddContact()">+ Add Contact</button>
+        <button class="btn btn-secondary" onclick="openModal('sf-guide-modal')">Import from Salesforce</button>
+      </div>
+    </div></div>`:''}
+  `;
+}
+
+// ══════════════════════════════════════════════
+// CONTACTS VIEW
+// ══════════════════════════════════════════════
+function renderContacts(){
+  let list=[...contacts];
+  if(searchQuery) list=list.filter(c=>
+    c.name.toLowerCase().includes(searchQuery)||(c.org||'').toLowerCase().includes(searchQuery)||
+    (c.email||'').toLowerCase().includes(searchQuery)||(c.specialty||'').toLowerCase().includes(searchQuery)||
+    (c.location||'').toLowerCase().includes(searchQuery)||(c.notes||'').toLowerCase().includes(searchQuery)
+  );
+  if(filterType!=='all') list=list.filter(c=>c.type===filterType);
+  if(filterStage!=='all') list=list.filter(c=>c.stage===filterStage);
+  if(filterSpec!=='all') list=list.filter(c=>c.specialty===filterSpec);
+  if(sortBy==='name') list.sort((a,b)=>a.name.localeCompare(b.name));
+  else if(sortBy==='stage') list.sort((a,b)=>STAGES.indexOf(a.stage)-STAGES.indexOf(b.stage));
+  else if(sortBy==='specialty') list.sort((a,b)=>(a.specialty||'zzz').localeCompare(b.specialty||'zzz'));
+  else if(sortBy==='recent') list.sort((a,b)=>b.created-a.created);
+
+  const totalPages=Math.ceil(list.length/PAGE_SIZE)||1;
+  if(contactsPage>=totalPages) contactsPage=totalPages-1;
+  const pageList=list.slice(contactsPage*PAGE_SIZE,(contactsPage+1)*PAGE_SIZE);
+
+  document.getElementById('content').innerHTML=`
+    <div class="quick-add-bar">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2" style="flex-shrink:0"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      <input type="text" id="qa-name" placeholder="Type a name and press Enter to quick-add…" style="border:none;background:transparent;font-size:14px;flex:1;min-width:200px;outline:none;color:#1e293b" onkeydown="if(event.key==='Enter') quickAdd()">
+      <select id="qa-type" style="border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:13px;background:#fff;color:#374151;cursor:pointer;outline:none">
+        <option value="doctor">Doctor</option>
+        <option value="hospital">Hospital</option>
+      </select>
+      <select id="qa-stage" style="border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:13px;background:#fff;color:#374151;cursor:pointer;outline:none">
+        ${STAGES.map(s=>`<option>${s}</option>`).join('')}
+      </select>
+      <button class="btn btn-primary btn-sm" onclick="quickAdd()">Add →</button>
+      <div class="quick-add-hint">Or use <strong>✨ Smart Paste</strong> to paste an email signature / bio and auto-fill all fields</div>
+    </div>
+
+    <div class="filter-bar">
+      <select class="filter-select" onchange="filterType=this.value;contactsPage=0;renderContacts()">
+        <option value="all" ${filterType==='all'?'selected':''}>All Types</option>
+        <option value="doctor" ${filterType==='doctor'?'selected':''}>Doctors only</option>
+        <option value="hospital" ${filterType==='hospital'?'selected':''}>Hospitals only</option>
+      </select>
+      <select class="filter-select" onchange="filterSpec=this.value;contactsPage=0;renderContacts()">
+        <option value="all" ${filterSpec==='all'?'selected':''}>All Specialties</option>
+        ${[...new Set(contacts.map(c=>c.specialty).filter(Boolean))].sort().map(s=>`<option value="${s}" ${filterSpec===s?'selected':''}>${SPEC_EMOJI[s]||'⚕️'} ${s}</option>`).join('')}
+      </select>
+      <select class="filter-select" onchange="filterStage=this.value;contactsPage=0;renderContacts()">
+        <option value="all" ${filterStage==='all'?'selected':''}>All Stages</option>
+        ${STAGES.map(s=>`<option value="${s}" ${filterStage===s?'selected':''}>${s}</option>`).join('')}
+      </select>
+      <select class="filter-select" onchange="sortBy=this.value;contactsPage=0;renderContacts()">
+        <option value="name" ${sortBy==='name'?'selected':''}>Sort: A→Z</option>
+        <option value="stage" ${sortBy==='stage'?'selected':''}>Sort: Stage</option>
+        <option value="specialty" ${sortBy==='specialty'?'selected':''}>Sort: Specialty</option>
+        <option value="recent" ${sortBy==='recent'?'selected':''}>Sort: Newest</option>
+      </select>
+      <span style="font-size:12px;color:var(--gray);margin-left:4px">${list.length} contact${list.length!==1?'s':''}</span>
+    </div>
+
+    <div class="card">
+      <div class="table-wrap">
+        ${list.length?`<table>
+          <thead><tr><th>Name</th><th>Type</th><th>Organization</th><th>Job Title</th><th>Medical Specialty</th><th>Location</th><th>Stage</th><th>Follow-up</th><th></th></tr></thead>
+          <tbody>${pageList.map(c=>`<tr class="clickable" onclick="openDetail('${c.id}')">
+            <td>
+              <strong>${escHtml(c.name)}</strong>
+              ${c.email?`<div style="font-size:11px;color:var(--blue)">${escHtml(c.email)}</div>`:''}
+            </td>
+            <td><span class="badge type-badge-${c.type}">${c.type==='doctor'?'Doctor':'Hospital'}</span></td>
+            <td>${escHtml(c.org||'—')}</td>
+            <td style="font-size:12px;color:#374151">${escHtml(c.jobtitle||'—')}</td>
+            <td>${specBadge(c.specialty)}</td>
+            <td>${escHtml(c.location||'—')}</td>
+            <td>
+              <select class="filter-select" style="font-size:11px;padding:3px 6px;border-radius:12px;background:transparent" onclick="event.stopPropagation()" onchange="quickStageChange('${c.id}',this.value)">
+                ${STAGES.map(s=>`<option ${c.stage===s?'selected':''}>${s}</option>`).join('')}
+              </select>
+            </td>
+            <td style="${isDue(c.followup)?'color:var(--red);font-weight:600':''}">${c.followup?formatDate(c.followup)+(isDue(c.followup)?' ⚠️':''):'—'}</td>
+            <td onclick="event.stopPropagation()">
+              <div style="display:flex;gap:4px">
+                <button class="btn btn-secondary btn-xs" onclick="openEditContact('${c.id}')">Edit</button>
+                <button class="btn btn-danger btn-xs" onclick="deleteContact('${c.id}')">Del</button>
+              </div>
+            </td>
+          </tr>`).join('')}</tbody>
+        </table>
+        ${totalPages>1?`<div style="display:flex;align-items:center;justify-content:center;gap:10px;padding:12px 0;border-top:1px solid var(--border)">
+          <button class="btn btn-secondary btn-sm" onclick="contactsPage--;renderContacts()" ${contactsPage===0?'disabled':''}>← Prev</button>
+          <span style="font-size:13px;color:var(--gray)">Page ${contactsPage+1} of ${totalPages} &nbsp;(${list.length} total)</span>
+          <button class="btn btn-secondary btn-sm" onclick="contactsPage++;renderContacts()" ${contactsPage>=totalPages-1?'disabled':''}>Next →</button>
+        </div>`:''}`:`<div class="empty">
+          <div class="empty-icon">👤</div>
+          <div class="empty-title">No contacts found</div>
+          <div class="empty-sub">${searchQuery||filterType!=='all'||filterStage!=='all'?'Try adjusting your filters or search.':'Use the quick-add bar above or click + Add Contact.'}</div>
+        </div>`}
+      </div>
+    </div>
+  `;
+}
+
+function quickAdd(){
+  const name=document.getElementById('qa-name')?.value.trim();
+  if(!name){toast('Enter a name first.');return;}
+  const type=document.getElementById('qa-type').value;
+  const stage=document.getElementById('qa-stage').value;
+  contacts.push({id:uid(),created:Date.now(),name,type,stage,specialty:'',org:'',phone:'',email:'',location:'',referral:'',followup:'',notes:''});
+  saveAll();
+  document.getElementById('qa-name').value='';
+  renderContacts();
+  toast(`✓ ${name} added as ${type}.`);
+}
+
+function quickStageChange(id,stage){
+  const c=contacts.find(x=>x.id===id);
+  if(c){c.stage=stage;saveAll();toast(`Stage updated to ${stage}`);}
+}
+
+// ══════════════════════════════════════════════
+// PIPELINE
+// ══════════════════════════════════════════════
+function renderOrganizations(){
+  const orgSearch=(document.getElementById('global-search')?.value||'').toLowerCase();
+  // Group contacts by org
+  const orgMap={};
+  const individuals=[];
+  contacts.forEach(c=>{
+    const org=(c.org||'').trim();
+    if(org && !isUnspecifiedOrg(org)){
+      if(!orgMap[org]) orgMap[org]=[];
+      orgMap[org].push(c);
+    } else {
+      individuals.push(c);
+    }
+  });
+  let orgs=Object.entries(orgMap).sort((a,b)=>a[0].localeCompare(b[0]));
+  if(orgSearch){
+    orgs=orgs.filter(([name,members])=>
+      name.toLowerCase().includes(orgSearch)||
+      members.some(c=>c.name.toLowerCase().includes(orgSearch)||
+        (c.jobtitle||'').toLowerCase().includes(orgSearch)||
+        (c.email||'').toLowerCase().includes(orgSearch))
+    );
+  }
+  const stageOrder={Signed:0,Negotiating:1,'Proposal Sent':2,'Meeting Scheduled':3,'Reached Out':4,Prospect:5,'Not Interested':6};
+  const bestStage=(members)=>members.reduce((best,c)=>(stageOrder[c.stage]??9)<(stageOrder[best]??9)?c.stage:best,'Prospect');
+
+  const totalOrgPages=Math.ceil(orgs.length/ORGS_PAGE_SIZE)||1;
+  if(orgsPage>=totalOrgPages) orgsPage=totalOrgPages-1;
+  const pageOrgs=orgs.slice(orgsPage*ORGS_PAGE_SIZE,(orgsPage+1)*ORGS_PAGE_SIZE);
+
+  document.getElementById('content').innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:16px;font-size:13px;color:var(--gray)">
+      <div><strong style="color:#1e293b">${orgs.length}</strong> organizations &nbsp;·&nbsp; <strong style="color:#1e293b">${contacts.filter(c=>c.org).length}</strong> contacts with org</div>
+      <div style="text-align:right"><strong style="color:var(--amber)">${individuals.length}</strong> individual doctors (no organization — potential job candidates)</div>
+    </div>
+
+    ${totalOrgPages>1?`<div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
+      <button class="btn btn-secondary btn-sm" onclick="orgsPage--;renderOrganizations()" ${orgsPage===0?'disabled':''}>← Prev</button>
+      <span style="font-size:13px;color:var(--gray)">Page ${orgsPage+1} of ${totalOrgPages}</span>
+      <button class="btn btn-secondary btn-sm" onclick="orgsPage++;renderOrganizations()" ${orgsPage>=totalOrgPages-1?'disabled':''}>Next →</button>
+    </div>`:''}
+
+    ${pageOrgs.map(([orgName,members],idx)=>{
+      const stage=bestStage(members);
+      const stageClass=STAGE_COLORS[stage]||'badge-gray';
+      const topTitles=[...new Set(members.map(c=>c.jobtitle).filter(Boolean))].slice(0,3);
+      const signed=members.filter(c=>c.stage==='Signed').length;
+      return `<div class="card" style="margin-bottom:10px">
+        <div class="card-header" style="cursor:pointer;user-select:none" onclick="toggleOrg(${idx})">
+          <div style="display:flex;align-items:center;gap:10px;width:100%">
+            <div style="width:36px;height:36px;border-radius:8px;background:#dbeafe;color:#1d4ed8;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0">${escHtml(orgName).charAt(0).toUpperCase()}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:14px;font-weight:700;color:#1e293b">${escHtml(orgName)}</div>
+              <div style="font-size:11px;color:var(--gray);margin-top:1px">${topTitles.map(t=>escHtml(t)).join(' · ')||'No titles on file'}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+              ${signed?`<span class="badge badge-green">${signed} signed</span>`:''}
+              <span class="badge ${stageClass}">${stage}</span>
+              <span style="font-size:12px;color:var(--gray)">${members.length} contact${members.length!==1?'s':''}</span>
+              <svg id="chevron-${idx}" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transition:transform .2s;color:var(--gray)"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+          </div>
+        </div>
+        <div id="org-body-${idx}" style="display:none">${(()=>{
+          const clinical=members.filter(c=>c.specialty);
+          const admin=members.filter(c=>!c.specialty);
+          const colTH=`<thead><tr>
+              <th style="padding:8px 16px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--gray);background:#f8fafc;border-bottom:1px solid var(--border)">Name</th>
+              <th style="padding:8px 16px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--gray);background:#f8fafc;border-bottom:1px solid var(--border)">Job Title</th>
+              <th style="padding:8px 16px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--gray);background:#f8fafc;border-bottom:1px solid var(--border)">Specialty</th>
+              <th style="padding:8px 16px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--gray);background:#f8fafc;border-bottom:1px solid var(--border)">Phone</th>
+              <th style="padding:8px 16px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--gray);background:#f8fafc;border-bottom:1px solid var(--border)">Stage</th>
+            </tr></thead>`;
+          const makeOrgRows=arr=>arr.map(c=>`<tr class="clickable" onclick="openDetail('${c.id}')">
+              <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9">
+                <strong style="font-size:13px">${escHtml(c.name)}</strong>
+                ${c.email?`<div style="font-size:11px;color:var(--blue)">${escHtml(c.email)}</div>`:''}
+              </td>
+              <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9;font-size:12px;color:#374151">${escHtml(c.jobtitle||'—')}</td>
+              <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9">${specBadge(c.specialty)}</td>
+              <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9;font-size:12px;color:#374151">${escHtml(c.phone||'—')}</td>
+              <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9"><span class="badge ${STAGE_COLORS[c.stage]||'badge-gray'}">${c.stage}</span></td>
+            </tr>`).join('');
+          let shtml='';
+          if(clinical.length){
+            shtml+=`<div style="padding:8px 16px 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#0369a1;background:#f0f9ff;border-bottom:1px solid #bae6fd">🏥 Clinical Staff (${clinical.length})</div>`;
+            shtml+=`<table style="width:100%;border-collapse:collapse">${colTH}<tbody>${makeOrgRows(clinical)}</tbody></table>`;
+          }
+          if(admin.length){
+            shtml+=`<div style="padding:8px 16px 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#7c3aed;background:#faf5ff;border-bottom:1px solid #e9d5ff;${clinical.length?'border-top:2px solid var(--border)':''}">💼 Administrative Contacts (${admin.length})</div>`;
+            shtml+=`<table style="width:100%;border-collapse:collapse">${colTH}<tbody>${makeOrgRows(admin)}</tbody></table>`;
+          }
+          return shtml;
+        })()}</div>
+      </div>`;
+    }).join('')}
+
+    ${individuals.length?`
+    <div class="card" style="border-color:#fcd34d">
+      <div class="card-header" style="background:#fffbeb;cursor:pointer" onclick="toggleOrg('ind')">
+        <div style="display:flex;align-items:center;gap:10px;width:100%">
+          <div style="width:36px;height:36px;border-radius:8px;background:#fef3c7;color:#b45309;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">👤</div>
+          <div style="flex:1">
+            <div style="font-size:14px;font-weight:700;color:#1e293b">Individual Doctors — No Organization</div>
+            <div style="font-size:11px;color:var(--amber)">Doctors looking for a job with you — org listed as "Unspecified"</div>
+          </div>
+          <span style="font-size:12px;color:var(--gray);flex-shrink:0">${individuals.length} contacts</span>
+          <svg id="chevron-ind" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transition:transform .2s;color:var(--gray)"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+      </div>
+      <div id="org-body-ind" style="display:none">${(()=>{
+        const indClinical=individuals.filter(c=>c.specialty);
+        const indAdmin=individuals.filter(c=>!c.specialty);
+        const indTH=`<thead><tr>
+            <th style="padding:8px 16px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--gray);background:#f8fafc;border-bottom:1px solid var(--border)">Name</th>
+            <th style="padding:8px 16px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--gray);background:#f8fafc;border-bottom:1px solid var(--border)">Job Title</th>
+            <th style="padding:8px 16px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--gray);background:#f8fafc;border-bottom:1px solid var(--border)">Specialty</th>
+            <th style="padding:8px 16px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--gray);background:#f8fafc;border-bottom:1px solid var(--border)">Location</th>
+            <th style="padding:8px 16px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--gray);background:#f8fafc;border-bottom:1px solid var(--border)">Stage</th>
+          </tr></thead>`;
+        const makeIndRows=arr=>arr.map(c=>`<tr class="clickable" onclick="openDetail('${c.id}')">
+            <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9">
+              <strong style="font-size:13px">${escHtml(c.name)}</strong>
+              ${c.email?`<div style="font-size:11px;color:var(--blue)">${escHtml(c.email)}</div>`:''}
+            </td>
+            <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9;font-size:12px;color:#374151">${escHtml(c.jobtitle||'—')}</td>
+            <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9">${specBadge(c.specialty)}</td>
+            <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9;font-size:12px;color:#374151">${escHtml(c.location||'—')}</td>
+            <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9"><span class="badge ${STAGE_COLORS[c.stage]||'badge-gray'}">${c.stage}</span></td>
+          </tr>`).join('');
+        let ihtml='';
+        if(indClinical.length){
+          ihtml+=`<div style="padding:8px 16px 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#0369a1;background:#f0f9ff;border-bottom:1px solid #bae6fd">🏥 Clinical Staff — Doctors with Specialty (${indClinical.length})</div>`;
+          ihtml+=`<table style="width:100%;border-collapse:collapse">${indTH}<tbody>${makeIndRows(indClinical)}</tbody></table>`;
+        }
+        if(indAdmin.length){
+          ihtml+=`<div style="padding:8px 16px 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#7c3aed;background:#faf5ff;border-bottom:1px solid #e9d5ff;${indClinical.length?'border-top:2px solid var(--border)':''}">💼 Other / Administrative (${indAdmin.length})</div>`;
+          ihtml+=`<table style="width:100%;border-collapse:collapse">${indTH}<tbody>${makeIndRows(indAdmin)}</tbody></table>`;
+        }
+        return ihtml;
+      })()}</div>
+    </div>`:''}
+
+    ${totalOrgPages>1?`<div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-top:12px">
+      <button class="btn btn-secondary btn-sm" onclick="orgsPage--;renderOrganizations()" ${orgsPage===0?'disabled':''}>← Prev</button>
+      <span style="font-size:13px;color:var(--gray)">Page ${orgsPage+1} of ${totalOrgPages} &nbsp;(${orgs.length} orgs total)</span>
+      <button class="btn btn-secondary btn-sm" onclick="orgsPage++;renderOrganizations()" ${orgsPage>=totalOrgPages-1?'disabled':''}>Next →</button>
+    </div>`:''}
+  `;
+}
+
+function toggleOrg(key){
+  const body=document.getElementById('org-body-'+key);
+  const chev=document.getElementById('chevron-'+key);
+  if(!body) return;
+  const open=body.style.display==='none';
+  body.style.display=open?'':'none';
+  if(chev) chev.style.transform=open?'rotate(180deg)':'';
+}
+
+function renderDedup(){
+  const groups=findDuplicateGroups();
+  const titles={dashboard:'Dashboard',contacts:'Contacts',orgs:'Organizations',pipeline:'Pipeline',activity:'Activity Log',dedup:'Find Duplicates'};
+  document.getElementById('page-title').textContent=titles.dedup;
+
+  if(!groups.length){
+    document.getElementById('content').innerHTML=`<div class="card"><div style="padding:48px;text-align:center">
+      <div style="font-size:40px;margin-bottom:12px">✅</div>
+      <div style="font-size:16px;font-weight:700;color:#1e293b;margin-bottom:8px">No duplicates found!</div>
+      <div style="font-size:13px;color:var(--gray)">All ${contacts.length} contacts appear to be unique.</div>
+    </div></div>`;
+    return;
+  }
+
+  const totalDups=groups.reduce((n,g)=>n+g.length-1,0);
+
+  document.getElementById('content').innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div style="font-size:13px;color:var(--gray)">Found <strong style="color:var(--red)">${groups.length} duplicate groups</strong> (${totalDups} extra records). Review each group and keep the best version.</div>
+      <button class="btn btn-danger" onclick="deleteAllDuplicates()">🗑 Auto-remove all duplicates (keep newest)</button>
+    </div>
+    ${groups.map((group,gi)=>`
+      <div class="card" style="margin-bottom:12px;border-color:#fca5a5">
+        <div class="card-header" style="background:#fff5f5">
+          <div class="card-title" style="color:var(--red)">Duplicate group ${gi+1} — ${group.length} records</div>
+          <button class="btn btn-secondary btn-sm ml-auto" onclick="keepOne('${group[0].id}','${group.map(c=>c.id).join(',')}')">Keep first, delete rest</button>
+        </div>
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr>
+            <th style="padding:8px 16px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--gray);background:#f8fafc;border-bottom:1px solid var(--border)">Name</th>
+            <th style="padding:8px 16px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--gray);background:#f8fafc;border-bottom:1px solid var(--border)">Organization</th>
+            <th style="padding:8px 16px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--gray);background:#f8fafc;border-bottom:1px solid var(--border)">Email</th>
+            <th style="padding:8px 16px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--gray);background:#f8fafc;border-bottom:1px solid var(--border)">Job Title</th>
+            <th style="padding:8px 16px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--gray);background:#f8fafc;border-bottom:1px solid var(--border)">Stage</th>
+            <th style="padding:8px 16px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--gray);background:#f8fafc;border-bottom:1px solid var(--border)"></th>
+          </tr></thead>
+          <tbody>${group.map((c,ci)=>`
+            <tr style="${ci===0?'background:#f0fdf4':''}" class="clickable" onclick="openDetail('${c.id}')">
+              <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9">
+                ${ci===0?'<span style="font-size:10px;background:#dcfce7;color:#15803d;font-weight:700;padding:1px 6px;border-radius:8px;margin-right:6px">KEEP</span>':''}
+                <strong>${escHtml(c.name)}</strong>
+              </td>
+              <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9;font-size:12px">${escHtml(c.org||'—')}</td>
+              <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9;font-size:12px;color:var(--blue)">${escHtml(c.email||'—')}</td>
+              <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9;font-size:12px">${escHtml(c.jobtitle||'—')}</td>
+              <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9"><span class="badge ${STAGE_COLORS[c.stage]||'badge-gray'}">${c.stage}</span></td>
+              <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9" onclick="event.stopPropagation()">
+                <button class="btn btn-danger btn-xs" onclick="deleteDup('${c.id}')">Delete</button>
+              </td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`).join('')}
+  `;
+}
+
+function deleteDup(id){
+  contacts=contacts.filter(c=>c.id!==id);
+  activities=activities.filter(a=>a.contactId!==id);
+  documents=documents.filter(d=>d.contactId!==id);
+  saveAll();renderDedup();render();
+}
+
+function keepOne(keepId,allIds){
+  const ids=allIds.split(',').filter(id=>id!==keepId);
+  if(!confirm(`Delete ${ids.length} duplicate record${ids.length>1?'s':''}?`)) return;
+  ids.forEach(id=>{
+    contacts=contacts.filter(c=>c.id!==id);
+    activities=activities.filter(a=>a.contactId!==id);
+    documents=documents.filter(d=>d.contactId!==id);
+  });
+  saveAll();toast(`✓ Deleted ${ids.length} duplicates.`);renderDedup();render();
+}
+
+function deleteAllDuplicates(){
+  const groups=findDuplicateGroups();
+  const totalDups=groups.reduce((n,g)=>n+g.length-1,0);
+  if(!confirm(`Auto-remove ${totalDups} duplicate records across ${groups.length} groups? The newest record in each group will be kept.`)) return;
+  groups.forEach(group=>{
+    // keep the one with the most data filled in
+    const scored=group.map(c=>({c,score:(c.email?2:0)+(c.phone?1:0)+(c.org?1:0)+(c.jobtitle?1:0)+(c.notes?1:0)+c.created/1e12}));
+    scored.sort((a,b)=>b.score-a.score);
+    const keepId=scored[0].c.id;
+    group.filter(c=>c.id!==keepId).forEach(c=>{
+      contacts=contacts.filter(x=>x.id!==c.id);
+      activities=activities.filter(a=>a.contactId!==c.id);
+      documents=documents.filter(d=>d.contactId!==c.id);
+    });
+  });
+  saveAll();toast(`✓ Removed ${totalDups} duplicates. ${contacts.length} contacts remain.`);renderDedup();render();
+}
+
+function renderPipeline(){
+  document.getElementById('content').innerHTML=`
+    <div class="pipeline-grid">
+      ${STAGES.map(stage=>{
+        const items=contacts.filter(c=>c.stage===stage);
+        return `<div class="pipeline-col">
+          <div class="pipeline-col-header" style="color:${stageColor(stage)}">${stage} <span style="font-size:10px;font-weight:400;color:var(--gray)">(${items.length})</span></div>
+          <div class="pipeline-col-body">
+            ${items.length?items.map(c=>`<div class="pipeline-card" onclick="openDetail('${c.id}')">
+              <div class="pipeline-card-name">${escHtml(c.name)}</div>
+              <div class="pipeline-card-sub">${escHtml(c.org||c.specialty||c.type)}</div>
+              ${c.followup&&isDue(c.followup)?`<div style="font-size:10px;color:var(--red);margin-top:3px">⚠️ Follow-up overdue</div>`:''}
+            </div>`).join(''):`<div class="pipeline-empty">Drop contacts here</div>`}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+  `;
+}
+
+// ══════════════════════════════════════════════
+// ACTIVITY LOG
+// ══════════════════════════════════════════════
+function renderActivity(){
+  const all=[...activities].sort((a,b)=>b.created-a.created);
+  document.getElementById('content').innerHTML=`
+    <div class="card">
+      <div class="card-header"><div class="card-title">All Activity</div><span style="font-size:12px;color:var(--gray);margin-left:8px">${all.length} entries</span></div>
+      <div style="padding:0 18px">
+        ${all.length?all.map(a=>{
+          const c=contacts.find(x=>x.id===a.contactId);
+          return `<div class="activity-item">
+            <div class="activity-icon ${ACT_CLASSES[a.type]||'act-note'}">${ACT_ICONS[a.type]||'📝'}</div>
+            <div class="activity-body">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
+                <span class="activity-contact clickable" onclick="openDetail('${a.contactId}')">${c?escHtml(c.name):'Unknown'}</span>
+                ${c?`<span class="badge type-badge-${c.type}" style="font-size:10px">${c.type==='doctor'?'Dr':'Hosp'}</span>`:''}
+                ${c?`<span class="badge ${STAGE_COLORS[c.stage]||'badge-gray'}" style="font-size:10px">${c.stage}</span>`:''}
+              </div>
+              <div class="activity-desc">${escHtml(a.desc)}</div>
+              <div class="activity-meta">${formatDate(a.date)} · ${a.type}${c&&c.org?` · ${escHtml(c.org)}`:''}</div>
+            </div>
+            <button class="btn btn-danger btn-xs" style="flex-shrink:0" onclick="deleteActivity('${a.id}')">Del</button>
+          </div>`;
+        }).join(''):`<div class="empty"><div class="empty-icon">🕐</div><div class="empty-title">No activity logged</div><div class="empty-sub">Open a contact and log calls, emails, or meetings.</div></div>`}
+      </div>
+    </div>
+  `;
+}
+
+// ══════════════════════════════════════════════
+// CONTACT DETAIL MODAL
+// ══════════════════════════════════════════════
+function openDetail(id){
+  const c=contacts.find(x=>x.id===id);
+  if(!c) return;
+  document.getElementById('detail-modal-title').textContent=c.name;
+  document.getElementById('edit-from-detail-btn').onclick=()=>{closeModal('detail-modal');openEditContact(id)};
+  window._detailId=id;
+  buildDetailBody(id);
+  openModal('detail-modal');
+}
+
+function buildDetailBody(id){
+  const c=contacts.find(x=>x.id===id);
+  const acts=activities.filter(a=>a.contactId===id).sort((a,b)=>b.created-a.created);
+  const docs=documents.filter(d=>d.contactId===id);
+  document.getElementById('detail-modal-body').innerHTML=`
+    <div style="display:grid;grid-template-columns:250px 1fr;min-height:420px">
+      <div style="padding:20px;border-right:1px solid var(--border);display:flex;flex-direction:column;gap:14px;overflow-y:auto">
+        <div>
+          <div class="avatar" style="background:${c.type==='doctor'?'#dbeafe':'#dcfce7'};color:${c.type==='doctor'?'#1d4ed8':'#15803d'}">${initials(c.name)}</div>
+          <div style="font-size:16px;font-weight:700;color:#1e293b">${escHtml(c.name)}</div>
+          <div style="margin-top:4px;display:flex;flex-direction:column;gap:4px">
+            ${c.jobtitle?`<div style="font-size:12px;font-weight:600;color:#374151">${escHtml(c.jobtitle)}</div>`:''}
+            ${c.specialty?specBadge(c.specialty):`<span style="font-size:12px;color:var(--gray)">${c.type}</span>`}
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <span class="badge type-badge-${c.type}">${c.type==='doctor'?'Doctor':'Hospital'}</span>
+          <span class="badge ${STAGE_COLORS[c.stage]||'badge-gray'}">${c.stage}</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px;font-size:12px">
+          ${c.org?field('Organization',escHtml(c.org)):''}
+          ${c.phone?field('Phone',`<a href="tel:${c.phone}" style="color:var(--blue)">${escHtml(c.phone)}</a>`):''}
+          ${c.email?field('Email',`<a href="mailto:${c.email}" style="color:var(--blue)">${escHtml(c.email)}</a>`):''}
+          ${c.location?field('Location',escHtml(c.location)):''}
+          ${c.referral?field('Referral',escHtml(c.referral)):''}
+          ${c.followup?field('Follow-up',`<span style="${isDue(c.followup)?'color:var(--red);font-weight:600':''}">${formatDate(c.followup)}${isDue(c.followup)?' ⚠️':''}</span>`):''}
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          ${(c.email||c.name)?`<a href="https://outlook.office.com/mail/search?q=${encodeURIComponent(c.email||c.name)}" target="_blank" style="display:flex;align-items:center;gap:6px;padding:7px 10px;background:#0078d4;color:#fff;border-radius:7px;font-size:12px;font-weight:600;text-decoration:none">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M7.5 12a4.5 4.5 0 1 1 9 0 4.5 4.5 0 0 1-9 0zm4.5-9.75a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0V3a.75.75 0 0 1 .75-.75zm0 15a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5a.75.75 0 0 1 .75-.75zM3 12a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5A.75.75 0 0 1 3 12zm15 0a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5A.75.75 0 0 1 18 12z"/></svg>
+            Search Outlook Emails
+          </a>`:''}
+          ${c.email?`<a href="mailto:${encodeURIComponent(c.email)}" style="display:flex;align-items:center;gap:6px;padding:7px 10px;background:#f1f5f9;color:#374151;border-radius:7px;font-size:12px;font-weight:600;text-decoration:none;border:1px solid var(--border)">
+            ✉️ Send Email
+          </a>`:''}
+          ${c.phone?`<a href="tel:${encodeURIComponent(c.phone)}" style="display:flex;align-items:center;gap:6px;padding:7px 10px;background:#f1f5f9;color:#374151;border-radius:7px;font-size:12px;font-weight:600;text-decoration:none;border:1px solid var(--border)">
+            📞 Call
+          </a>`:''}
+        </div>
+        ${c.notes?`<div><div style="color:var(--gray);font-size:10px;text-transform:uppercase;letter-spacing:.4px;font-weight:600;margin-bottom:6px">Notes</div><div class="notes-area">${escHtml(c.notes)}</div></div>`:''}
+        <div style="margin-top:auto;font-size:10px;color:var(--gray)">Added ${formatDate(new Date(c.created).toISOString().slice(0,10))}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;overflow:hidden">
+        <div style="padding:0 20px">
+          <div class="tabs">
+            <div class="tab active" id="dtab-acts" onclick="switchTab('acts')">Activity (${acts.length})</div>
+            <div class="tab" id="dtab-docs" onclick="switchTab('docs')">Documents (${docs.length})</div>
+            <div class="tab" id="dtab-emails" onclick="switchTab('emails')">📧 Emails</div>
+            <div class="tab" id="dtab-stage" onclick="switchTab('stage')">Change Stage</div>
+          </div>
+        </div>
+        <div id="dtab-content" style="flex:1;overflow-y:auto;padding:0 20px 20px">${renderActsTab(acts,id)}</div>
+      </div>
+    </div>
+  `;
+}
+
+function field(label,val){return `<div><div style="color:var(--gray);font-size:10px;text-transform:uppercase;letter-spacing:.4px;font-weight:600;margin-bottom:2px">${label}</div><div>${val}</div></div>`}
+
+function switchTab(tab){
+  document.querySelectorAll('[id^="dtab-"]').forEach(t=>t.classList.remove('active'));
+  document.getElementById('dtab-'+tab)?.classList.add('active');
+  const id=window._detailId;
+  const acts=activities.filter(a=>a.contactId===id).sort((a,b)=>b.created-a.created);
+  const docs=documents.filter(d=>d.contactId===id);
+  const el=document.getElementById('dtab-content');
+  if(tab==='acts') el.innerHTML=renderActsTab(acts,id);
+  else if(tab==='docs') el.innerHTML=renderDocsTab(docs,id);
+  else if(tab==='emails'){const c=contacts.find(x=>x.id===id);renderEmailsTab(c,id);}
+  else if(tab==='stage') el.innerHTML=renderStageTab(id);
+}
+
+function renderActsTab(acts,id){
+  return `<div style="margin-bottom:12px"><button class="btn btn-primary btn-sm" onclick="openLogActivity('${id}')">+ Log Activity</button></div>
+    <div>${acts.length?acts.map(a=>`<div class="activity-item">
+      <div class="activity-icon ${ACT_CLASSES[a.type]||'act-note'}">${ACT_ICONS[a.type]||'📝'}</div>
+      <div class="activity-body"><div class="activity-desc">${escHtml(a.desc)}</div><div class="activity-meta">${formatDate(a.date)} · ${a.type}</div></div>
+      <button class="btn btn-danger btn-xs" onclick="deleteActivity('${a.id}');buildDetailBody('${id}')">Del</button>
+    </div>`).join(''):`<div class="empty" style="padding:20px 0"><div class="empty-icon">🕐</div><div class="empty-sub">No activity yet. Log a call, email, or meeting above.</div></div>`}</div>`;
+}
+
+function renderDocsTab(docs,id){
+  return `<div style="margin-bottom:12px"><label class="btn btn-secondary btn-sm" style="cursor:pointer">📎 Attach File<input type="file" style="display:none" onchange="attachFile(event,'${id}')"></label></div>
+    <div>${docs.length?docs.map(d=>`<div class="doc-item">
+      <span style="font-size:18px">📄</span><div class="doc-name">${escHtml(d.name)}</div><div class="doc-size">${formatSize(d.size)}</div>
+      <button class="btn btn-secondary btn-xs" onclick="downloadDoc('${d.id}')">Download</button>
+      <button class="btn btn-danger btn-xs" onclick="deleteDoc('${d.id}');buildDetailBody('${id}')">Del</button>
+    </div>`).join(''):`<div class="empty" style="padding:20px 0"><div class="empty-icon">📄</div><div class="empty-sub">No documents attached yet.</div></div>`}</div>`;
+}
+
+function renderStageTab(id){
+  const c=contacts.find(x=>x.id===id);
+  return `<div style="display:flex;flex-direction:column;gap:8px">${STAGES.map(s=>`
+    <button onclick="changeStage('${id}','${s}')" class="btn ${c.stage===s?'btn-primary':'btn-secondary'}" style="justify-content:flex-start">
+      ${c.stage===s?'✓ ':''}${s}
+    </button>`).join('')}</div>`;
+}
+
+function changeStage(id,stage){
+  const c=contacts.find(x=>x.id===id);
+  if(!c) return;
+  c.stage=stage;saveAll();
+  buildDetailBody(id);
+  render();
+  toast(`Stage → ${stage}`);
+}
+
+// ══════════════════════════════════════════════
+// ADD / EDIT CONTACT
+// ══════════════════════════════════════════════
+function populateSpecialtySelect(selectedVal=''){
+  const sel=document.getElementById('f-specialty');
+  sel.innerHTML='<option value="">— Select specialty —</option>';
+  // Group headers
+  const groups=[
+    {label:'Critical Care & Hospital',keys:['Intensivist','Critical Care','Hospitalist','Pulmonologist','Neuro-Intensivist','PICU Physician']},
+    {label:'Neurology',keys:['Neurologist','Neurosurgeon','Neurosurgery PA']},
+    {label:'Cardiology',keys:['Cardiologist','Interventional Cardiologist','Cardiac Surgeon']},
+    {label:'Emergency & Surgery',keys:['Emergency Medicine','Trauma Surgeon','Acute Care Surgeon','General Surgeon','Orthopedic Surgeon']},
+    {label:'Medicine Subspecialties',keys:['Oncologist','Hematologist','Infectious Disease','Nephrologist','Gastroenterologist','Endocrinologist','Rheumatologist','Geriatrician','Internal Medicine','Family Medicine']},
+    {label:'Procedural & Support',keys:['Anesthesiologist','Radiologist','Interventional Radiologist','Psychiatrist','Dermatologist','Urologist','Ophthalmologist','OB/GYN','Pediatrician']},
+    {label:'Advanced Practice',keys:['NP / APRN','Physician Assistant']},
+    {label:'Other',keys:['Other']},
+  ];
+  groups.forEach(g=>{
+    const og=document.createElement('optgroup');
+    og.label=g.label;
+    g.keys.forEach(k=>{
+      const def=SPECIALTIES_DEF.find(d=>d[0]===k);
+      if(!def) return;
+      const [n,,e,d]=def;
+      const opt=document.createElement('option');
+      opt.value=n;opt.textContent=`${e} ${n} — ${d}`;
+      if(n===selectedVal) opt.selected=true;
+      og.appendChild(opt);
+    });
+    sel.appendChild(og);
+  });
+}
+
+function openAddContact(prefill={}){
+  document.getElementById('modal-title').textContent='Add Contact';
+  document.getElementById('edit-id').value='';
+  document.getElementById('f-type').value=prefill.type||'doctor';
+  document.getElementById('f-stage').value=prefill.stage||'Prospect';
+  document.getElementById('f-name').value=prefill.name||'';
+  document.getElementById('f-jobtitle').value=prefill.jobtitle||'';
+  populateSpecialtySelect(prefill.specialty||'');
+  document.getElementById('f-org').value=prefill.org||'';
+  document.getElementById('f-phone').value=prefill.phone||'';
+  document.getElementById('f-email').value=prefill.email||'';
+  document.getElementById('f-location').value=prefill.location||'';
+  document.getElementById('f-referral').value=prefill.referral||'';
+  document.getElementById('f-followup').value=prefill.followup||'';
+  document.getElementById('f-notes').value=prefill.notes||'';
+  openModal('contact-modal');
+}
+
+function openEditContact(id){
+  const c=contacts.find(x=>x.id===id);
+  if(!c) return;
+  document.getElementById('modal-title').textContent='Edit Contact';
+  document.getElementById('edit-id').value=id;
+  ['type','stage','name','jobtitle','org','phone','email','location','referral','followup','notes'].forEach(f=>{
+    const el=document.getElementById('f-'+f);if(el) el.value=c[f]||'';
+  });
+  populateSpecialtySelect(c.specialty||'');
+  openModal('contact-modal');
+}
+
+function saveContact(){
+  const name=document.getElementById('f-name').value.trim();
+  if(!name){toast('Name is required.');return;}
+  const id=document.getElementById('edit-id').value;
+  const data={type:document.getElementById('f-type').value,stage:document.getElementById('f-stage').value,name,
+    jobtitle:document.getElementById('f-jobtitle').value.trim(),
+    specialty:document.getElementById('f-specialty').value,org:document.getElementById('f-org').value.trim(),
+    phone:document.getElementById('f-phone').value.trim(),email:document.getElementById('f-email').value.trim(),
+    location:document.getElementById('f-location').value.trim(),referral:document.getElementById('f-referral').value.trim(),
+    followup:document.getElementById('f-followup').value,notes:document.getElementById('f-notes').value.trim()};
+  if(id){const i=contacts.findIndex(x=>x.id===id);if(i>=0) contacts[i]={...contacts[i],...data};}
+  else contacts.push({id:uid(),created:Date.now(),...data});
+  saveAll();closeModal('contact-modal');render();
+  toast(`✓ ${name} saved.`);
+}
+
+function deleteContact(id){
+  const c=contacts.find(x=>x.id===id);
+  if(!confirm(`Delete ${c?.name||'this contact'}? All activities and documents will also be removed.`)) return;
+  contacts=contacts.filter(x=>x.id!==id);activities=activities.filter(x=>x.contactId!==id);documents=documents.filter(x=>x.contactId!==id);
+  saveAll();render();toast('Contact deleted.');
+}
+
+// ══════════════════════════════════════════════
+// ACTIVITY
+// ══════════════════════════════════════════════
+function openLogActivity(contactId){
+  document.getElementById('act-contact-id').value=contactId;
+  document.getElementById('act-type').value='call';
+  document.getElementById('act-date').value=new Date().toISOString().slice(0,10);
+  document.getElementById('act-desc').value='';
+  openModal('activity-modal');
+}
+function saveActivity(){
+  const desc=document.getElementById('act-desc').value.trim();
+  if(!desc){toast('Description is required.');return;}
+  const contactId=document.getElementById('act-contact-id').value;
+  activities.push({id:uid(),contactId,type:document.getElementById('act-type').value,date:document.getElementById('act-date').value,desc,created:Date.now()});
+  saveAll();closeModal('activity-modal');
+  if(window._detailId===contactId) buildDetailBody(contactId);
+  render();toast('✓ Activity logged.');
+}
+function deleteActivity(id){
+  if(!confirm('Delete this activity?')) return;
+  activities=activities.filter(x=>x.id!==id);saveAll();render();toast('Activity deleted.');
+}
+
+// ══════════════════════════════════════════════
+// DOCUMENTS
+// ══════════════════════════════════════════════
+function attachFile(event,contactId){
+  const file=event.target.files[0];if(!file) return;
+  if(file.size>10*1024*1024){toast('File too large (max 10 MB).');return;}
+  const reader=new FileReader();
+  reader.onload=e=>{
+    documents.push({id:uid(),contactId,name:file.name,size:file.size,type:file.type,data:e.target.result,created:Date.now()});
+    saveAll();buildDetailBody(contactId);toast('📎 File attached.');
+  };
+  reader.readAsDataURL(file);
+}
+function downloadDoc(id){
+  const d=documents.find(x=>x.id===id);if(!d) return;
+  const a=document.createElement('a');a.href=d.data;a.download=d.name;a.click();
+}
+function deleteDoc(id){
+  if(!confirm('Remove this document?')) return;
+  documents=documents.filter(x=>x.id!==id);saveAll();toast('Document removed.');
+}
+
+// ══════════════════════════════════════════════
+// SMART PASTE
+// ══════════════════════════════════════════════
+let _parsed={};
+function openPasteModal(){
+  document.getElementById('paste-input').value='';
+  document.getElementById('parse-preview').innerHTML='';
+  document.getElementById('parse-preview').classList.add('hidden');
+  document.getElementById('paste-use-btn').disabled=true;
+  _parsed={};
+  openModal('paste-modal');
+  setTimeout(()=>document.getElementById('paste-input').focus(),100);
+}
+
+const PASTE_FIELD_LABELS={name:'Name',type:'Type',email:'Email',phone:'Phone',specialty:'Specialty',org:'Organization',location:'Location',role:'Job Title'};
+function runSmartParse(){
+  const text=document.getElementById('paste-input').value.trim();
+  if(text.length<5){document.getElementById('parse-preview').classList.add('hidden');document.getElementById('paste-use-btn').disabled=true;_parsed={};return;}
+  _parsed=parseContactText(text);
+  const keys=Object.keys(_parsed).filter(k=>_parsed[k]);
+  if(!keys.length){document.getElementById('parse-preview').classList.add('hidden');document.getElementById('paste-use-btn').disabled=true;return;}
+  document.getElementById('parse-preview').className='parsed-preview';
+  document.getElementById('parse-preview').innerHTML=`
+    <div style="font-size:12px;font-weight:700;color:#15803d;margin-bottom:10px">✓ Detected — edit anything before saving:</div>
+    ${keys.map(k=>{
+      const label=PASTE_FIELD_LABELS[k]||k;
+      if(k==='type') return `<div class="parsed-row"><span class="parsed-label">${label}</span><select id="pp-${k}" style="flex:1;padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px"><option value="doctor"${_parsed[k]==='doctor'?' selected':''}>Doctor</option><option value="hospital"${_parsed[k]==='hospital'?' selected':''}>Hospital</option></select></div>`;
+      if(k==='specialty') return `<div class="parsed-row"><span class="parsed-label">${label}</span><select id="pp-${k}" style="flex:1;padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px"><option value="">— none —</option>${SPECIALTIES.map(s=>`<option value="${s}"${_parsed[k]===s?' selected':''}>${s}</option>`).join('')}</select></div>`;
+      return `<div class="parsed-row"><span class="parsed-label">${label}</span><input id="pp-${k}" type="text" value="${escHtml(_parsed[k])}" style="flex:1;padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px" oninput="_parsed['${k}']=this.value"></div>`;
+    }).join('')}
+    <div style="font-size:11px;color:var(--gray);margin-top:8px">Click any field above to edit it before saving.</div>
+  `;
+  document.getElementById('paste-use-btn').disabled=false;
+}
+function syncPasteFields(){
+  Object.keys(_parsed).forEach(k=>{
+    const el=document.getElementById('pp-'+k);
+    if(el) _parsed[k]=el.value;
+  });
+}
+
+function parseContactText(rawText){
+  // LinkedIn: strip everything after sidebar signals so we only parse the main profile
+  const sidebarCutoffs=[
+    /\bPeople also viewed\b/i,
+    /\bPeople also follow\b/i,
+    /\bOthers named\b/i,
+    /\bSimilar profiles\b/i,
+    /\bMore profiles for you\b/i,
+    /\bAdd new skills with these courses\b/i,
+    /\bExplore collaborative articles\b/i,
+  ];
+  let text=rawText;
+  for(const pat of sidebarCutoffs){
+    const m=text.search(pat);
+    if(m>80) text=text.slice(0,m);
+  }
+  text=text.trim();
+
+  const result={};
+  const emailMatch=text.match(/[\w.+-]+@[\w-]+\.[a-z]{2,}/i);
+  if(emailMatch) result.email=emailMatch[0];
+  const phoneMatch=text.match(/(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/);
+  if(phoneMatch) result.phone=phoneMatch[0].trim();
+
+  const lines=text.split(/\n/).map(l=>l.trim()).filter(Boolean);
+
+  // LinkedIn profile: first non-empty line is usually the person's name,
+  // second line is their headline/title. Detect by checking for LinkedIn URL or "connections" text.
+  const isLinkedIn=/linkedin\.com\/in\//i.test(rawText)||/\d+\s+connections?\b/i.test(rawText.slice(0,400))||/\bConnect\b.*\bMessage\b/i.test(rawText.slice(0,600));
+  if(isLinkedIn){
+    // First line that isn't a button/nav word is the name
+    const navWords=/^(Home|My Network|Jobs|Messaging|Notifications|Me|Work|Premium|Search|Connect|Message|Follow|More|Sign in|Join now|LinkedIn)$/i;
+    const nameLine=lines.find(l=>l.length>2&&l.length<60&&!navWords.test(l)&&!/^\d/.test(l)&&!/[@·|]/.test(l));
+    if(nameLine) result.name=nameLine.trim();
+    // Headline: line right after name that isn't a location or connection count
+    const nameIdx=lines.indexOf(nameLine);
+    if(nameIdx>=0){
+      for(let i=nameIdx+1;i<Math.min(nameIdx+5,lines.length);i++){
+        const l=lines[i];
+        if(/\d+\s+connections?/i.test(l)||/^\d+$/.test(l)) continue;
+        if(l.length>3&&l.length<120&&!/^(Connect|Message|Follow|More|Edit|Open to|Pronouns)/i.test(l)){
+          result.role=l.trim();
+          break;
+        }
+      }
+    }
+  } else {
+    // Non-LinkedIn: look for "Dr." or credentials on first few lines
+    for(const line of lines){
+      if(/^(Dr\.?|MD|DO|PhD|RN|NP|PA|Prof\.?)\s+/i.test(line)||/,\s*(MD|DO|PhD|RN|NP|PA|FACC|FACS|MPH)/i.test(line)){
+        result.name=line.replace(/\s*\|.*$/,'').replace(/\s*,?\s*(MD|DO|PhD|RN|NP|PA|FACC|FACS|MPH).*/i,'').replace(/^(Dr\.?\s+)/i,'Dr. ').trim();
+        result.type='doctor';
+        break;
+      }
+    }
+    if(!result.name&&lines.length>0&&lines[0].length<60&&!/[@\d]/.test(lines[0])){
+      result.name=lines[0].replace(/\s*\|.*$/,'').trim();
+    }
+    // Role/title line
+    const roleLine=lines.find(l=>/(chief|director|head|chair|vice president|VP|attending|fellow|resident|professor|associate|assistant|physician|surgeon)\b/i.test(l)&&l.length<100);
+    if(roleLine) result.role=roleLine.trim();
+  }
+
+  // Specialty — search all lines
+  const specLine=lines.find(l=>SPECIALTIES.some(s=>l.toLowerCase().includes(s.toLowerCase())));
+  if(specLine){
+    const found=SPECIALTIES.find(s=>specLine.toLowerCase().includes(s.toLowerCase()));
+    if(found) result.specialty=found;
+  }
+  // Also check role for specialty keywords
+  if(!result.specialty&&result.role){
+    const found=SPECIALTIES.find(s=>result.role.toLowerCase().includes(s.toLowerCase()));
+    if(found) result.specialty=found;
+  }
+
+  // Organization
+  const orgLine=lines.find(l=>/hospital|health|medical|clinic|center|system|institute|memorial|presbyterian|cedars|mount sinai|mayo|johns hopkins|university|college/i.test(l)&&!/@/.test(l)&&l.length<100);
+  if(orgLine) result.org=orgLine.replace(/\s*\|.*$/,'').trim();
+
+  // Location
+  const locMatch=text.match(/([A-Z][a-z]+(?:[\s-][A-Z][a-z]+)*),\s*([A-Z]{2})\b/);
+  if(locMatch) result.location=locMatch[0];
+  // LinkedIn often has "City, Country" or "City, State Area"
+  if(!result.location){
+    const liLoc=lines.find(l=>/\b(Area|Metropolitan|Greater|Region)\b/i.test(l)||(/,/.test(l)&&l.length<50&&!/\d{4}/.test(l)&&!/@/.test(l)&&lines.indexOf(l)>1));
+    if(liLoc) result.location=liLoc.trim();
+  }
+
+  // Type detection
+  if(!result.type){
+    if(/hospital|health system|medical center|clinic|institute/i.test(text)) result.type='hospital';
+    else result.type='doctor';
+  }
+  return result;
+}
+
+function useParsedData(){
+  syncPasteFields();
+  closeModal('paste-modal');
+  openAddContact({
+    name:_parsed.name||'',type:_parsed.type||'doctor',email:_parsed.email||'',
+    phone:_parsed.phone||'',org:_parsed.org||'',specialty:_parsed.specialty||'',
+    jobtitle:_parsed.role||'',location:_parsed.location||'',notes:''
+  });
+}
+
+// ══════════════════════════════════════════════
+// CSV IMPORT
+// ══════════════════════════════════════════════
+let _csvData=[];
+let _csvHeaders=[];
+
+// Salesforce field name mappings → our field keys
+const SF_MAP={
+  'first name':'_first','last name':'_last','name':'name','full name':'name','contact name':'name',
+  'email':'email','email address':'email','email 1':'email',
+  'phone':'phone','mobile':'phone','phone number':'phone','mobile phone':'phone','business phone':'phone','office phone':'phone',
+  'account name':'org','company':'org','hospital':'org','organization':'org','company name':'org','facility':'org','facility name':'org',
+  'title':'jobtitle','job title':'jobtitle','department':'jobtitle','role':'jobtitle',
+  'medical specialty':'specialty','specialty':'specialty','doctor\'s specialty':'specialty','doctors specialty':'specialty','doctor specialty':'specialty','physician specialty':'specialty','clinical specialty':'specialty',
+  'mailing city':'_city','city':'_city','mailing state':'_state','state':'_state',
+  'mailing state/province':'_state','state/province':'_state',
+  'mailing country':'skip','mailing zip/postal code':'skip','mailing zip':'skip','mailing street':'skip','salutation':'skip',
+  'stage':'stage','opportunity stage':'stage','lead status':'stage','status':'stage',
+  'description':'notes','notes':'notes','comments':'notes','bio':'notes',
+  'referred by':'referral','referral':'referral','introduced by':'referral','lead source':'referral',
+  'follow up date':'followup','follow-up date':'followup','next follow up':'followup',
+};
+const CRM_FIELDS=['name','_first','_last','type','jobtitle','org','specialty','email','phone','_city','_state','location','stage','referral','notes','followup'];
+const CRM_LABELS={name:'Full Name',_first:'First Name',_last:'Last Name',type:'Type (doctor/hospital)',jobtitle:'Job Title / Role',org:'Organization',specialty:'Medical Specialty',email:'Email',phone:'Phone',_city:'City',_state:'State / Province',location:'City + State combined',stage:'Pipeline Stage',referral:'Referral / Lead Source',notes:'Notes',followup:'Follow-up Date'};
+
+function loadFile(event){
+  const file=event.target.files[0];
+  if(!file) return;
+  const isXlsx=/\.xlsx?$/i.test(file.name);
+  document.getElementById('csv-status').textContent=`Reading ${file.name}…`;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      let rows;
+      if(isXlsx){
+        const wb=XLSX.read(e.target.result,{type:'array'});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        const raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+        rows=raw.map(r=>r.map(v=>String(v==null?'':v).trim()));
+      } else {
+        rows=parseCSVText(e.target.result);
+      }
+      rows=rows.map(r=>r.map(c=>String(c==null?'':c).trim()));
+      // Find the header row: first row with 3+ non-empty cells (skips Salesforce report metadata)
+      let headerIdx=0;
+      for(let i=0;i<Math.min(rows.length,10);i++){
+        const nonEmpty=rows[i].filter(c=>c.length>0);
+        if(nonEmpty.length>=3){headerIdx=i;break;}
+      }
+      const allRows=rows.slice(headerIdx).filter(r=>r.some(c=>c.length>0));
+      if(allRows.length<2){document.getElementById('csv-status').textContent='File appears empty or has no data rows.';return;}
+      _csvHeaders=allRows[0];
+      _csvData=allRows.slice(1);
+      document.getElementById('csv-status').textContent=`✓ Loaded ${_csvData.length} contacts from ${file.name}`;
+      buildMappingUI();
+    }catch(err){document.getElementById('csv-status').textContent='Error reading file: '+err.message;}
+  };
+  if(isXlsx) reader.readAsArrayBuffer(file);
+  else reader.readAsText(file);
+}
+
+function parseCSVText(text){
+  const rows=[];let row=[],cur='',inQuote=false;
+  for(let i=0;i<text.length;i++){
+    const ch=text[i];
+    if(ch==='"'){inQuote=!inQuote;}
+    else if(ch===','&&!inQuote){row.push(cur.trim());cur='';}
+    else if((ch==='\n'||ch==='\r')&&!inQuote){if(cur||row.length){row.push(cur.trim());rows.push(row);row=[];cur='';}}
+    else cur+=ch;
+  }
+  if(cur||row.length){row.push(cur.trim());rows.push(row);}
+  return rows;
+}
+
+function buildMappingUI(){
+  document.getElementById('import-mapping-section').classList.remove('hidden');
+  // Auto-map based on SF_MAP
+  const autoMap={};
+  _csvHeaders.forEach((h,i)=>{
+    const key=SF_MAP[h.toLowerCase().trim()];
+    if(key) autoMap[i]=key;
+  });
+  let mapHTML='<div style="display:grid;grid-template-columns:1fr 24px 1fr;gap:6px;align-items:center;font-size:12px;font-weight:600;color:var(--gray);margin-bottom:6px"><div>Your CSV column</div><div></div><div>MedCRM field</div></div>';
+  _csvHeaders.forEach((h,i)=>{
+    const auto=autoMap[i]||'';
+    mapHTML+=`<div class="field-map-row">
+      <div style="font-size:12px;color:#374151;background:#f8fafc;border:1px solid var(--border);border-radius:5px;padding:5px 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(h)}">${escHtml(h)}</div>
+      <div class="field-map-arrow">→</div>
+      <select id="map-${i}" style="font-size:12px;padding:5px 8px;border:1px solid var(--border);border-radius:5px;background:#fff;color:#374151">
+        <option value="">— skip —</option>
+        ${CRM_FIELDS.map(f=>`<option value="${f}" ${auto===f?'selected':''}>${CRM_LABELS[f]}</option>`).join('')}
+      </select>
+    </div>`;
+  });
+  document.getElementById('field-mapping').innerHTML=mapHTML;
+  // Preview
+  const previewRows=_csvData.slice(0,3);
+  let tableHTML=`<table class="csv-preview-table"><thead><tr>${_csvHeaders.map(h=>`<th>${escHtml(h)}</th>`).join('')}</tr></thead><tbody>`;
+  previewRows.forEach(row=>{
+    tableHTML+=`<tr>${_csvHeaders.map((_,i)=>`<td>${escHtml(row[i]||'')}</td>`).join('')}</tr>`;
+  });
+  tableHTML+='</tbody></table>';
+  document.getElementById('csv-preview').innerHTML=tableHTML;
+  document.getElementById('do-import-btn').style.display='';
+}
+
+function doImport(){
+  const mapping={};
+  _csvHeaders.forEach((_,i)=>{
+    const val=document.getElementById('map-'+i)?.value;
+    if(val) mapping[i]=val;
+  });
+  if(!Object.values(mapping).includes('name')&&!Object.values(mapping).includes('_first')){
+    toast('Please map at least a Name column.');return;
+  }
+  let imported=0,skipped=0;
+  _csvData.forEach(row=>{
+    const c={id:uid(),created:Date.now(),type:'doctor',stage:'Prospect',name:'',jobtitle:'',specialty:'',org:'',phone:'',email:'',location:'',referral:'',followup:'',notes:''};
+    let first='',last='',city='',state='';
+    Object.entries(mapping).forEach(([i,field])=>{
+      const val=(row[+i]||'').trim();
+      if(!val) return;
+      if(field==='_first') first=val;
+      else if(field==='_last') last=val;
+      else if(field==='_city') city=val;
+      else if(field==='_state') state=val;
+      else if(field==='type'){
+        c.type=/hospital|health|clinic|system|center/i.test(val)?'hospital':'doctor';
+      }else if(field==='stage'){
+        const match=STAGES.find(s=>s.toLowerCase()===val.toLowerCase())||
+          (val.toLowerCase().includes('sign')?'Signed':val.toLowerCase().includes('prospect')?'Prospect':null);
+        if(match) c.stage=match;
+      }else c[field]=val;
+    });
+    if(first||last) c.name=([first,last].filter(Boolean).join(' '));
+    if(!c.name){skipped++;return;}
+    if(city||state) c.location=[city,state].filter(Boolean).join(', ');
+    if(!c.type&&/hospital|health|clinic|system|center/i.test(c.org||'')) c.type='hospital';
+    contacts.push(c);imported++;
+  });
+  saveAll();closeModal('import-modal');render();
+  toast(`✓ Imported ${imported} contacts${skipped?`, skipped ${skipped} (no name)`:''}.`);
+}
+
+// ══════════════════════════════════════════════
+// EXPORT
+// ══════════════════════════════════════════════
+function exportCSV(){
+  if(!contacts.length){toast('No contacts to export.');return;}
+  const headers=['Name','Type','Organization','Specialty','Email','Phone','Location','Stage','Follow-up','Referral','Notes','Added'];
+  const rows=contacts.map(c=>[c.name,c.type,c.org,c.specialty,c.email,c.phone,c.location,c.stage,c.followup,c.referral,c.notes,new Date(c.created).toLocaleDateString()].map(v=>`"${(v||'').replace(/"/g,'""')}"`));
+  const csv=[headers,...rows].map(r=>r.join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,﻿'+encodeURIComponent(csv);
+  a.download=`MedCRM_contacts_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  toast(`✓ Exported ${contacts.length} contacts.`);
+}
+
+// ══════════════════════════════════════════════
+// UTILS
+// ══════════════════════════════════════════════
+function openModal(id){document.getElementById(id).classList.remove('hidden')}
+function closeModal(id){document.getElementById(id).classList.add('hidden')}
+function specBadge(specialty){
+  if(!specialty) return '<span style="color:var(--gray);font-size:12px">—</span>';
+  const cls=SPEC_COLOR[specialty]||'spec-gray';
+  const emoji=SPEC_EMOJI[specialty]||'⚕️';
+  return `<span class="spec-badge ${cls}">${emoji} ${escHtml(specialty)}</span>`;
+}
+function escHtml(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function initials(name){return(name||'').split(' ').filter(Boolean).map(w=>w[0]).join('').toUpperCase().slice(0,2)}
+function formatDate(d){if(!d) return '—';const[y,m,day]=d.split('-');const mo=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return`${mo[+m-1]} ${+day}, ${y}`}
+function isDue(d){return d&&d<=new Date().toISOString().slice(0,10)}
+function formatSize(b){if(!b) return '';if(b<1024) return b+'B';if(b<1024*1024) return Math.round(b/1024)+'KB';return(b/1024/1024).toFixed(1)+'MB'}
+function stageColor(s){return{Prospect:'#94a3b8','Reached Out':'#60a5fa','Meeting Scheduled':'#a78bfa','Proposal Sent':'#fbbf24',Negotiating:'#f59e0b',Signed:'#4ade80','Not Interested':'#f87171'}[s]||'#94a3b8'}
+let _toastTimer;
+function toast(msg){
+  const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');
+  clearTimeout(_toastTimer);_toastTimer=setTimeout(()=>el.classList.remove('show'),3000);
+}
+
+
+
+// Migration: auto-detect medical specialty from job title keywords
+const TITLE_TO_SPEC=[
+  [/intensivist|tele.?icu|teleintensivist/i,'Intensivist'],
+  [/hospitalist/i,'Hospitalist'],
+  [/neuro.?intensivist|neurocritical/i,'Neuro-Intensivist'],
+  [/neurolog/i,'Neurologist'],
+  [/neurosurgeon|neuro.?surg/i,'Neurosurgeon'],
+  [/cardiolog/i,'Cardiologist'],
+  [/cardiac.?surg|heart.?surg/i,'Cardiac Surgeon'],
+  [/pulmonolog|pulm\b|respirat/i,'Pulmonologist'],
+  [/critical.?care|icu physician|intensivist/i,'Intensivist'],
+  [/emergency.?med|\bem physician\b|\bemer\b/i,'Emergency Medicine'],
+  [/trauma.?surg/i,'Trauma Surgeon'],
+  [/oncolog/i,'Oncologist'],
+  [/hematolog/i,'Hematologist'],
+  [/infectious.?dis/i,'Infectious Disease'],
+  [/nephrolog/i,'Nephrologist'],
+  [/gastro|gi physician/i,'Gastroenterologist'],
+  [/endocrinolog/i,'Endocrinologist'],
+  [/rheumatolog/i,'Rheumatologist'],
+  [/anesthes/i,'Anesthesiologist'],
+  [/radiolog/i,'Radiologist'],
+  [/internal.?med|\bim physician/i,'Internal Medicine'],
+  [/family.?med|family.?pract/i,'Family Medicine'],
+  [/pediatric.?icu|picu/i,'PICU Physician'],
+  [/pediatric/i,'Pediatrician'],
+  [/psychiatr/i,'Psychiatrist'],
+  [/orthoped/i,'Orthopedic Surgeon'],
+  [/urolog/i,'Urologist'],
+  [/dermatolog/i,'Dermatologist'],
+  [/ophthalmolog/i,'Ophthalmologist'],
+  [/ob.?gyn|obstetric|gynecolog/i,'OB/GYN'],
+  [/nurse.?practitioner|\bnp\b|\baprn\b/i,'NP / APRN'],
+  [/physician.?assistant|\bpa-c\b|\bpa\b/i,'Physician Assistant'],
+];
+
+function runMigrations(){
+  // Move admin titles out of specialty → jobtitle
+  const adminSpecs=new Set(['CMO / Medical Director','Hospital Administrator']);
+  let changed=false;
+  contacts.forEach(c=>{
+    if(adminSpecs.has(c.specialty)){
+      if(!c.jobtitle) c.jobtitle=c.specialty;
+      c.specialty='';changed=true;
+    }
+  });
+  // Auto-detect specialty from job title
+  contacts.forEach(c=>{
+    if(c.specialty) return;
+    const text=(c.jobtitle||'')+' '+(c.notes||'');
+    if(!text.trim()) return;
+    for(const [re,spec] of TITLE_TO_SPEC){
+      if(re.test(text)){c.specialty=spec;changed=true;break;}
+    }
+  });
+  if(changed) saveAll();
+}
+
+// ══════════════════════════════════════════════
+// OUTLOOK / MICROSOFT GRAPH INTEGRATION
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// Overlay click to close
+document.querySelectorAll('.modal-overlay').forEach(el=>{
+  el.addEventListener('click',e=>{if(e.target===el) el.classList.add('hidden')});
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape') document.querySelectorAll('.modal-overlay:not(.hidden)').forEach(el=>el.classList.add('hidden'));
+});
+
+injectOutlookBtn();
+function renderEmailsTab(contact,id){
+  const el=document.getElementById('dtab-content');
+  const q=contact.email||contact.name||'';
+  const webUrl='https://outlook.office.com/mail/search/query/'+q.replace(/@/g,'%40');
+  const appUrl='ms-outlook://search?query='+encodeURIComponent(q);
+  el.innerHTML=`<div style="padding:28px 20px;text-align:center">
+    <div style="font-size:38px;margin-bottom:12px">📧</div>
+    <div style="font-weight:700;font-size:15px;margin-bottom:4px">Emails with ${escHtml(contact.name)}</div>
+    <div style="color:var(--gray);font-size:12px;margin-bottom:20px">${contact.email?escHtml(contact.email):'No email on file'}</div>
+    <div style="display:flex;flex-direction:column;gap:10px;max-width:280px;margin:0 auto">
+      ${q?`<a href="${appUrl}" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:11px 16px;background:#0078d4;color:#fff;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>
+        Search in Outlook App
+      </a>
+      <a href="${webUrl}" target="_blank" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:11px 16px;background:#f1f5f9;color:#374151;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;border:1px solid var(--border)">
+        Search in Outlook Web
+      </a>`:''}
+      ${contact.email?`<a href="mailto:${escHtml(contact.email)}" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:9px 16px;background:#f1f5f9;color:#374151;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;border:1px solid var(--border)">
+        ✉️ Send New Email
+      </a>`:''}
+    </div>
+  </div>`;
+}
+function injectOutlookBtn(){}
+</script>
+</body>
+</html>
+
+
+
+
+
+
