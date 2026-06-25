@@ -1966,6 +1966,17 @@ function runMigrations(){
       if(re.test(text)){c.specialty=spec;changed=true;break;}
     }
   });
+  // Reclassify contacts whose NAME looks like a facility as type=hospital
+  const facilityPattern=/\b(hospital|health system|health network|medical center|medical group|healthcare|clinic|clinics|infirmary|institute|memorial|presbyterian|cedars|mount sinai|mayo|university hospital|university medical|children['']?s|veterans|va |kaiser|banner|ascension|commonspirit|hca |tenet|advocate|dignity health|bon secours|providence|wellstar|sutter|intermountain|geisinger|allina|fairview|christus|mercy|adventist|SSM |UPMC|UCLA|UCSF|NYU |Rush |Northwestern |Emory |Vanderbilt |Duke |Stanford |Yale |Johns Hopkins|Mass General|Brigham|Beth Israel|Cedars|Scripps|Sharp |Ochsner|Baylor|Trinity|Sentara|Inova|Atrium|Novant|Ballad|Quorum|Lifepoint|Steward|Prime Healthcare|Kindred|Select Medical|Encompass|Acuity)\b/i;
+  contacts.forEach(c=>{
+    if(c.type==='hospital') return; // already set
+    if(facilityPattern.test(c.name||'')){
+      c.type='hospital';
+      // hospitals shouldn't have a medical specialty
+      if(c.specialty) c.specialty='';
+      changed=true;
+    }
+  });
   if(changed) saveAll();
 }
 
