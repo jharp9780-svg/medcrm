@@ -400,24 +400,23 @@ Referred by Dr. Marcus Lee" oninput="runSmartParse()"></textarea>
     </div>
     <div class="modal-body">
       <input type="hidden" id="act-contact-id">
-      <div class="form-row">
-        <div class="form-group">
-          <label>Type *</label>
-          <select id="act-type">
-            <option value="call">📞 Phone Call</option>
-            <option value="email">✉️ Email</option>
-            <option value="meeting">🤝 Meeting</option>
-            <option value="note">📝 Note</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Date *</label>
-          <input type="date" id="act-date">
-        </div>
+      <div class="form-group">
+        <label>Type *</label>
+        <select id="act-type">
+          <option value="teams">💻 Microsoft Teams Meeting</option>
+          <option value="call">📞 Phone Call</option>
+          <option value="email">✉️ Email</option>
+          <option value="meeting">🤝 In-Person Meeting</option>
+          <option value="note">📝 Note</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Date *</label>
+        <input type="date" id="act-date">
       </div>
       <div class="form-group">
         <label>Description *</label>
-        <textarea id="act-desc" placeholder="What happened? What was discussed? Any follow-up needed?"></textarea>
+        <textarea id="act-desc" rows="6" placeholder="What happened? What was discussed? Any follow-up needed?"></textarea>
       </div>
     </div>
     <div class="modal-footer">
@@ -519,8 +518,8 @@ const HOSPITAL_STAGES=['Prospect','Reached Out','Meeting Scheduled','Proposal Se
 const STAGES=[...new Set([...DOCTOR_STAGES,...HOSPITAL_STAGES])]; // union for filters/pipeline
 const STAGE_COLORS={'Prospect':'badge-gray','Reached Out':'badge-blue','Intro Call Done':'badge-blue','Meeting Scheduled':'badge-purple','Application Sent':'badge-purple','Interviewing':'badge-purple','Proposal Sent':'badge-amber','Negotiating':'badge-amber','Offer Made':'badge-amber','Contract Signed':'badge-green','Hired':'badge-green','Not Interested':'badge-red'};
 function stagesFor(type){return type==='hospital'?HOSPITAL_STAGES:DOCTOR_STAGES;}
-const ACT_ICONS={call:'📞',email:'✉️',meeting:'🤝',note:'📝',doc:'📎'};
-const ACT_CLASSES={call:'act-call',email:'act-email',meeting:'act-meeting',note:'act-note',doc:'act-doc'};
+const ACT_ICONS={call:'📞',email:'✉️',meeting:'🤝',teams:'💻',note:'📝',doc:'📎'};
+const ACT_CLASSES={call:'act-call',email:'act-email',meeting:'act-meeting',teams:'act-meeting',note:'act-note',doc:'act-doc'};
 // Specialties: [name, color-class, emoji, description]
 const SPECIALTIES_DEF=[
   // Critical / Hospital-based (most relevant to RICU)
@@ -1390,7 +1389,7 @@ function renderActsTab(acts,id){
   return `<div style="margin-bottom:12px"><button class="btn btn-primary btn-sm" onclick="openLogActivity('${id}')">+ Log Activity</button></div>
     <div>${acts.length?acts.map(a=>`<div class="activity-item">
       <div class="activity-icon ${ACT_CLASSES[a.type]||'act-note'}">${ACT_ICONS[a.type]||'📝'}</div>
-      <div class="activity-body"><div class="activity-desc">${escHtml(a.desc)}</div><div class="activity-meta">${formatDate(a.date)} · ${a.type}</div></div>
+      <div class="activity-body"><div class="activity-desc" style="white-space:pre-wrap">${escHtml(a.desc)}</div><div class="activity-meta">${formatDate(a.date)} · ${a.type}</div></div>
       <button class="btn btn-danger btn-xs" onclick="deleteActivity('${a.id}');buildDetailBody('${id}')">Del</button>
     </div>`).join(''):`<div class="empty" style="padding:20px 0"><div class="empty-icon">🕐</div><div class="empty-sub">No activity yet. Log a call, email, or meeting above.</div></div>`}</div>`;
 }
@@ -2058,13 +2057,14 @@ function renderEmailsTab(contact,id){
       listEl.innerHTML=`<div style="text-align:center;padding:24px"><div style="font-size:28px;margin-bottom:8px">📭</div><div style="color:var(--gray);font-size:12px">No synced emails yet.<br>Emails will appear here after Power Automate captures them.</div></div>`;
       return;
     }
-    listEl.innerHTML=items.map(e=>{
+    listEl.innerHTML=items.map((e,i)=>{
       const subject=e.subject||'(no subject)';
       const received=e.received?new Date(e.received).toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}):'';
       const from=e.from||'';
       const preview=e.preview||'';
       const isSent=e.direction==='sent';
-      return `<div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:12px 14px">
+      const eid='email-expand-'+id+'-'+i;
+      return `<div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:12px 14px;cursor:pointer" onclick="const el=document.getElementById('${eid}');el.style.display=el.style.display==='none'?'block':'none'">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
           <div style="font-size:12px;font-weight:600;color:#1e293b">${escHtml(subject)}</div>
           <div style="display:flex;align-items:center;gap:6px;white-space:nowrap;margin-left:8px">
@@ -2073,7 +2073,8 @@ function renderEmailsTab(contact,id){
           </div>
         </div>
         <div style="font-size:11px;color:var(--blue);margin-bottom:4px">${escHtml(from)}</div>
-        ${preview?`<div style="font-size:11px;color:var(--gray);line-height:1.4">${escHtml(preview.substring(0,200))}${preview.length>200?'…':''}</div>`:''}
+        ${preview?`<div style="font-size:11px;color:var(--gray);line-height:1.4">${escHtml(preview.substring(0,120))}${preview.length>120?'…':''}</div>`:''}
+        <div id="${eid}" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:12px;color:#334155;white-space:pre-wrap;line-height:1.6">${escHtml(preview)}</div>
       </div>`;
     }).join('');
   }).catch(()=>{
