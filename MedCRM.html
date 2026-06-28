@@ -2014,19 +2014,22 @@ document.addEventListener('keydown',e=>{
 });
 
 injectOutlookBtn();
-const SP_SITE='https://remoteicu.sharepoint.com/sites/RICUDocument';
-const SP_LIST='MedCRM Emails';
-
-async function fetchSharePointEmails(contactEmail,contactName){
-  const filter=contactEmail
-    ? `substringof('${contactEmail.replace(/'/g,"''")}',From0) or substringof('${contactEmail.replace(/'/g,"''")}',From)`
-    : `substringof('${(contactName||'').replace(/'/g,"''")}',From0) or substringof('${(contactName||'').replace(/'/g,"''")}',From)`;
-  const url=`${SP_SITE}/_api/web/lists/getbytitle('${SP_LIST}')/items?$select=Title,From,From0,Subject,Subject0,Received,Preview&$filter=${encodeURIComponent(filter)}&$orderby=Created desc&$top=100`;
-  const res=await fetch(url,{credentials:'include',headers:{'Accept':'application/json;odata=verbose'}});
-  if(!res.ok) throw new Error('SharePoint returned '+res.status);
-  const json=await res.json();
-  return (json.d&&json.d.results)||[];
+// ── EMAIL SYNC via Firebase (Power Automate writes here) ──
+let _emailsCache=null;
+function loadEmailsFromFirebase(){
+  if(_emailsCache!==null) return Promise.resolve(_emailsCache);
+  return _db.ref('emails').once('value').then(snap=>{
+    const val=snap.val();
+    if(!val){_emailsCache=[];return [];}
+    _emailsCache=Object.values(val);
+    return _emailsCache;
+  });
 }
+// invalidate cache when new emails arrive
+_db.ref('emails').on('value',snap=>{
+  const val=snap.val();
+  _emailsCache=val?Object.values(val):[];
+});
 
 function renderEmailsTab(contact,id){
   const el=document.getElementById('dtab-content');
@@ -2043,32 +2046,39 @@ function renderEmailsTab(contact,id){
       <div style="text-align:center;padding:24px;color:var(--gray);font-size:12px">Loading emails…</div>
     </div>
   </div>`;
-  // Fetch from SharePoint
-  fetchSharePointEmails(contact.email,contact.name).then(items=>{
+  loadEmailsFromFirebase().then(allEmails=>{
     const listEl=document.getElementById('emails-list-'+id);
     if(!listEl) return;
+    const search=[contact.email,contact.email2,contact.name].filter(Boolean).map(s=>s.toLowerCase());
+    const items=allEmails.filter(e=>{
+      const hay=(e.from+' '+e.to+' '+e.subject+' '+e.preview).toLowerCase();
+      return search.some(s=>hay.includes(s));
+    }).sort((a,b)=>(b.received||0)-(a.received||0)).slice(0,100);
     if(!items.length){
       listEl.innerHTML=`<div style="text-align:center;padding:24px"><div style="font-size:28px;margin-bottom:8px">📭</div><div style="color:var(--gray);font-size:12px">No synced emails yet.<br>Emails will appear here after Power Automate captures them.</div></div>`;
       return;
     }
     listEl.innerHTML=items.map(e=>{
-      const from=e.From||e.From0||'';
-      const subject=e.Subject||e.Subject0||e.Title||'(no subject)';
-      const received=e.Received?new Date(e.Received).toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}):'';
-      const preview=e.Preview||'';
+      const subject=e.subject||'(no subject)';
+      const received=e.received?new Date(e.received).toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}):'';
+      const from=e.from||'';
+      const preview=e.preview||'';
+      const isSent=e.direction==='sent';
       return `<div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:12px 14px">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
           <div style="font-size:12px;font-weight:600;color:#1e293b">${escHtml(subject)}</div>
-          <div style="font-size:10px;color:var(--gray);white-space:nowrap;margin-left:8px">${escHtml(received)}</div>
+          <div style="display:flex;align-items:center;gap:6px;white-space:nowrap;margin-left:8px">
+            ${isSent?'<span style="font-size:9px;background:#dbeafe;color:#1d4ed8;border-radius:4px;padding:1px 5px;font-weight:600">SENT</span>':'<span style="font-size:9px;background:#dcfce7;color:#166534;border-radius:4px;padding:1px 5px;font-weight:600">RECEIVED</span>'}
+            <div style="font-size:10px;color:var(--gray)">${escHtml(received)}</div>
+          </div>
         </div>
         <div style="font-size:11px;color:var(--blue);margin-bottom:4px">${escHtml(from)}</div>
         ${preview?`<div style="font-size:11px;color:var(--gray);line-height:1.4">${escHtml(preview.substring(0,200))}${preview.length>200?'…':''}</div>`:''}
       </div>`;
     }).join('');
-  }).catch(err=>{
+  }).catch(()=>{
     const listEl=document.getElementById('emails-list-'+id);
-    if(!listEl) return;
-    listEl.innerHTML=`<div style="text-align:center;padding:24px"><div style="font-size:28px;margin-bottom:8px">🔒</div><div style="color:var(--gray);font-size:12px">Could not load emails — make sure you're signed into SharePoint in this browser.<br><br><a href="${SP_SITE}" target="_blank" style="color:var(--blue)">Sign in to SharePoint</a>, then reopen this tab.</div></div>`;
+    if(listEl) listEl.innerHTML=`<div style="text-align:center;padding:24px;color:var(--gray);font-size:12px">Error loading emails. Please refresh.</div>`;
   });
 }
 function injectOutlookBtn(){}
