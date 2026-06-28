@@ -1540,14 +1540,18 @@ function saveActivity(){
   const desc=document.getElementById('act-desc').value.trim();
   if(!desc){toast('Description is required.');return;}
   const contactId=document.getElementById('act-contact-id').value;
-  activities.push({id:uid(),contactId,type:document.getElementById('act-type').value,date:document.getElementById('act-date').value,desc,created:Date.now()});
-  saveAll();closeModal('activity-modal');
+  const newAct={id:uid(),contactId,type:document.getElementById('act-type').value,date:document.getElementById('act-date').value,desc,created:Date.now()};
+  activities.push(newAct);
+  _db.ref('activities').push(newAct);
+  closeModal('activity-modal');
   if(window._detailId===contactId) buildDetailBody(contactId);
   render();toast('✓ Activity logged.');
 }
 function deleteActivity(id){
   if(!confirm('Delete this activity?')) return;
-  activities=activities.filter(x=>x.id!==id);saveAll();render();toast('Activity deleted.');
+  activities=activities.filter(x=>x.id!==id);
+  _db.ref('activities').set(activities);
+  render();toast('Activity deleted.');
 }
 
 // ══════════════════════════════════════════════
