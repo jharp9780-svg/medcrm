@@ -1340,8 +1340,11 @@ function buildDetailBody(id){
                 <div style="font-size:12px;color:#92400e;white-space:pre-wrap">${escHtml(c.notes)}</div>
               </div>`:
               (c.notesLog||[]).slice().reverse().map(n=>`
-                <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:7px;padding:10px 12px">
-                  <div style="font-size:10px;color:#b45309;font-weight:600;margin-bottom:4px">${new Date(n.ts).toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'})}</div>
+                <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:7px;padding:10px 12px;position:relative">
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+                    <div style="font-size:10px;color:#b45309;font-weight:600">${new Date(n.ts).toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'})}</div>
+                    <button onclick="deleteNote('${c.id}',${n.ts})" style="background:none;border:none;cursor:pointer;color:#b45309;opacity:.5;font-size:14px;line-height:1;padding:0 2px" title="Delete note">✕</button>
+                  </div>
                   <div style="font-size:12px;color:#92400e;white-space:pre-wrap">${escHtml(n.text)}</div>
                 </div>`).join('')
             }
@@ -2011,26 +2014,62 @@ document.addEventListener('keydown',e=>{
 });
 
 injectOutlookBtn();
+const SP_SITE='https://remoteicu.sharepoint.com/sites/RICUDocument';
+const SP_LIST='MedCRM Emails';
+
+async function fetchSharePointEmails(contactEmail,contactName){
+  const filter=contactEmail
+    ? `substringof('${contactEmail.replace(/'/g,"''")}',From0) or substringof('${contactEmail.replace(/'/g,"''")}',From)`
+    : `substringof('${(contactName||'').replace(/'/g,"''")}',From0) or substringof('${(contactName||'').replace(/'/g,"''")}',From)`;
+  const url=`${SP_SITE}/_api/web/lists/getbytitle('${SP_LIST}')/items?$select=Title,From,From0,Subject,Subject0,Received,Preview&$filter=${encodeURIComponent(filter)}&$orderby=Created desc&$top=100`;
+  const res=await fetch(url,{credentials:'include',headers:{'Accept':'application/json;odata=verbose'}});
+  if(!res.ok) throw new Error('SharePoint returned '+res.status);
+  const json=await res.json();
+  return (json.d&&json.d.results)||[];
+}
+
 function renderEmailsTab(contact,id){
   const el=document.getElementById('dtab-content');
-  const q=contact.email||contact.name||'';
-  const webUrl='https://outlook.office.com/mail/search/query/'+q.replace(/@/g,'%40');
-  const appUrl='ms-outlook://search?query='+encodeURIComponent(q);
-  el.innerHTML=`<div style="padding:28px 20px;text-align:center">
-    <div style="font-size:38px;margin-bottom:12px">📧</div>
-    <div style="font-weight:700;font-size:15px;margin-bottom:4px">Emails with ${escHtml(contact.name)}</div>
-    <div style="color:var(--gray);font-size:12px;margin-bottom:20px">${contact.email?escHtml(contact.email):'No email on file'}</div>
-    <div style="display:flex;flex-direction:column;gap:10px;max-width:280px;margin:0 auto">
-      ${q?`<a href="${appUrl}" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:11px 16px;background:#0078d4;color:#fff;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>
-        Search in Outlook App
-      </a>
-      <a href="${webUrl}" target="_blank" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:11px 16px;background:#f1f5f9;color:#374151;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;border:1px solid var(--border)">
-        Search in Outlook Web
-      </a>`:''}
-      ${contact.email?`<a href="mailto:${escHtml(contact.email)}" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:9px 16px;background:#f1f5f9;color:#374151;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;border:1px solid var(--border)">
-        ✉️ Send New Email
-      </a>`:''}
+  const webUrl='https://outlook.office.com/mail/search/query/'+(contact.email||contact.name||'').replace(/@/g,'%40');
+  el.innerHTML=`<div style="padding:16px 0">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div style="font-size:12px;font-weight:600;color:var(--gray);text-transform:uppercase;letter-spacing:.4px">Synced Emails</div>
+      <div style="display:flex;gap:6px">
+        <a href="${webUrl}" target="_blank" class="btn btn-secondary btn-xs">🔍 Search Outlook Web</a>
+        ${contact.email?`<a href="mailto:${escHtml(contact.email)}" class="btn btn-secondary btn-xs">✉️ Send Email</a>`:''}
+      </div>
+    </div>
+    <div id="emails-list-${id}" style="display:flex;flex-direction:column;gap:8px">
+      <div style="text-align:center;padding:24px;color:var(--gray);font-size:12px">Loading emails…</div>
+    </div>
+  </div>`;
+  // Fetch from SharePoint
+  fetchSharePointEmails(contact.email,contact.name).then(items=>{
+    const listEl=document.getElementById('emails-list-'+id);
+    if(!listEl) return;
+    if(!items.length){
+      listEl.innerHTML=`<div style="text-align:center;padding:24px"><div style="font-size:28px;margin-bottom:8px">📭</div><div style="color:var(--gray);font-size:12px">No synced emails yet.<br>Emails will appear here after Power Automate captures them.</div></div>`;
+      return;
+    }
+    listEl.innerHTML=items.map(e=>{
+      const from=e.From||e.From0||'';
+      const subject=e.Subject||e.Subject0||e.Title||'(no subject)';
+      const received=e.Received?new Date(e.Received).toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}):'';
+      const preview=e.Preview||'';
+      return `<div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:12px 14px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
+          <div style="font-size:12px;font-weight:600;color:#1e293b">${escHtml(subject)}</div>
+          <div style="font-size:10px;color:var(--gray);white-space:nowrap;margin-left:8px">${escHtml(received)}</div>
+        </div>
+        <div style="font-size:11px;color:var(--blue);margin-bottom:4px">${escHtml(from)}</div>
+        ${preview?`<div style="font-size:11px;color:var(--gray);line-height:1.4">${escHtml(preview.substring(0,200))}${preview.length>200?'…':''}</div>`:''}
+      </div>`;
+    }).join('');
+  }).catch(err=>{
+    const listEl=document.getElementById('emails-list-'+id);
+    if(!listEl) return;
+    listEl.innerHTML=`<div style="text-align:center;padding:24px"><div style="font-size:28px;margin-bottom:8px">🔒</div><div style="color:var(--gray);font-size:12px">Could not load emails — make sure you're signed into SharePoint in this browser.<br><br><a href="${SP_SITE}" target="_blank" style="color:var(--blue)">Sign in to SharePoint</a>, then reopen this tab.</div></div>`;
+  });
     </div>
   </div>`;
 }
@@ -2052,15 +2091,31 @@ function addNote(contactId){
   saveAll();
   input.value='';
   // Re-render notes log in place without full rebuild
-  const logEl=document.getElementById('notes-log-'+contactId);
-  if(logEl){
-    logEl.innerHTML=c.notesLog.slice().reverse().map(n=>`
-      <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:7px;padding:10px 12px">
-        <div style="font-size:10px;color:#b45309;font-weight:600;margin-bottom:4px">${new Date(n.ts).toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'})}</div>
-        <div style="font-size:12px;color:#92400e;white-space:pre-wrap">${escHtml(n.text)}</div>
-      </div>`).join('');
-  }
+  refreshNotesLog(c);
   toast('Note saved');
+}
+
+function refreshNotesLog(c){
+  const logEl=document.getElementById('notes-log-'+c.id);
+  if(!logEl) return;
+  logEl.innerHTML=c.notesLog.slice().reverse().map(n=>`
+    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:7px;padding:10px 12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <div style="font-size:10px;color:#b45309;font-weight:600">${new Date(n.ts).toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'})}</div>
+        <button onclick="deleteNote('${c.id}',${n.ts})" style="background:none;border:none;cursor:pointer;color:#b45309;opacity:.5;font-size:14px;line-height:1;padding:0 2px" title="Delete note">✕</button>
+      </div>
+      <div style="font-size:12px;color:#92400e;white-space:pre-wrap">${escHtml(n.text)}</div>
+    </div>`).join('');
+}
+
+function deleteNote(contactId,ts){
+  if(!confirm('Delete this note?')) return;
+  const c=contacts.find(x=>x.id===contactId);
+  if(!c) return;
+  c.notesLog=(c.notesLog||[]).filter(n=>n.ts!==ts);
+  saveAll();
+  refreshNotesLog(c);
+  toast('Note deleted');
 }
 </script>
 </body>
