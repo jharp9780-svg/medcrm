@@ -317,7 +317,7 @@ textarea{resize:vertical;min-height:80px}
         </div>
       </div>
       <div class="form-row">
-        <div class="form-group">
+        <div class="form-group" id="f-org-group">
           <label>Organization / Hospital</label>
           <input type="text" id="f-org" placeholder="Mount Sinai Medical Center">
         </div>
@@ -1318,7 +1318,7 @@ function buildDetailBody(id){
           <span class="badge ${STAGE_COLORS[c.stage]||'badge-gray'}">${c.stage}</span>
         </div>
         <div style="display:flex;flex-direction:column;gap:10px;font-size:12px">
-          ${c.org?field('Organization',escHtml(c.org)):''}
+          ${c.org&&c.type==='hospital'?field('Organization',escHtml(c.org)):''}
           ${c.phone?field('Phone',`<a href="tel:${c.phone}" style="color:var(--blue)">${escHtml(c.phone)}</a>`):''}
           ${c.email?field('Email',`<a href="mailto:${c.email}" style="color:var(--blue)">${escHtml(c.email)}</a>`):''}
           ${c.email2?field('Email 2',`<a href="mailto:${c.email2}" style="color:var(--blue)">${escHtml(c.email2)}</a>`):''}
@@ -1475,6 +1475,8 @@ function updateStageOptions(type,selectedStage=''){
   const sel=document.getElementById('f-stage');
   const stages=stagesFor(type);
   sel.innerHTML=stages.map(s=>`<option value="${s}"${s===selectedStage?' selected':''}>${s}</option>`).join('');
+  const orgGroup=document.getElementById('f-org-group');
+  if(orgGroup) orgGroup.style.display=type==='hospital'?'':'none';
 }
 
 function openAddContact(prefill={}){
