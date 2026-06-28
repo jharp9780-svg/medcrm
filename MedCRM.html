@@ -351,6 +351,13 @@ textarea{resize:vertical;min-height:80px}
         </div>
       </div>
       <div class="form-group full">
+        <label>Tags <span style="font-weight:400;color:var(--gray)">(press Enter to add)</span></label>
+        <div id="f-tags-container" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:#fff;min-height:36px;cursor:text" onclick="document.getElementById('f-tag-input').focus()">
+          <div id="f-tags-list" style="display:contents"></div>
+          <input id="f-tag-input" type="text" placeholder="Add tag…" style="border:none;outline:none;font-size:13px;min-width:100px;padding:2px 4px;flex:1" onkeydown="handleTagInput(event)">
+        </div>
+      </div>
+      <div class="form-group">
         <label>Notes</label>
         <textarea id="f-notes" placeholder="Key details, interests, concerns, what was discussed…"></textarea>
       </div>
@@ -1318,6 +1325,7 @@ function buildDetailBody(id){
           ${c.location?field('Location',escHtml(c.location)):''}
           ${c.referral?field('Referral',escHtml(c.referral)):''}
           ${c.followup?field('Follow-up',`<span style="${isDue(c.followup)?'color:var(--red);font-weight:600':''}">${formatDate(c.followup)}${isDue(c.followup)?' ⚠️':''}</span>`):''}
+          ${c.tags&&c.tags.length?field('Tags',c.tags.map(t=>`<span style="display:inline-block;background:#ede9fe;color:#6d28d9;border-radius:12px;padding:2px 10px;font-size:11px;font-weight:600;margin:2px 2px 2px 0">${escHtml(t)}</span>`).join('')):''}
         </div>
         <div style="display:flex;flex-direction:column;gap:6px">
           ${(c.email||c.name)?`<a href="https://outlook.office.com/mail/search?q=${encodeURIComponent(c.email||c.name)}" target="_blank" style="display:flex;align-items:center;gap:6px;padding:7px 10px;background:#0078d4;color:#fff;border-radius:7px;font-size:12px;font-weight:600;text-decoration:none">
@@ -1486,6 +1494,8 @@ function openAddContact(prefill={}){
   document.getElementById('f-referral').value=prefill.referral||'';
   document.getElementById('f-followup').value=prefill.followup||'';
   document.getElementById('f-notes').value=prefill.notes||'';
+  _formTags=Array.isArray(prefill.tags)?[...prefill.tags]:[];
+  renderFormTags();
   openModal('contact-modal');
 }
 
@@ -1512,7 +1522,7 @@ function saveContact(){
     specialty:document.getElementById('f-specialty').value,org:document.getElementById('f-org').value.trim(),
     phone:document.getElementById('f-phone').value.trim(),email:document.getElementById('f-email').value.trim(),email2:document.getElementById('f-email2').value.trim(),
     location:document.getElementById('f-location').value.trim(),referral:document.getElementById('f-referral').value.trim(),
-    followup:document.getElementById('f-followup').value,notes:document.getElementById('f-notes').value.trim()};
+    followup:document.getElementById('f-followup').value,notes:document.getElementById('f-notes').value.trim(),tags:[..._formTags]};
   if(id){const i=contacts.findIndex(x=>x.id===id);if(i>=0) contacts[i]={...contacts[i],...data};}
   else contacts.push({id:uid(),created:Date.now(),...data});
   saveAll();closeModal('contact-modal');render();
@@ -2087,6 +2097,22 @@ function renderEmailsTab(contact,id){
   });
 }
 function injectOutlookBtn(){}
+
+// ── TAGS ──
+let _formTags=[];
+function renderFormTags(){
+  const list=document.getElementById('f-tags-list');
+  if(!list) return;
+  list.innerHTML=_formTags.map((t,i)=>`<span style="display:inline-flex;align-items:center;gap:4px;background:#ede9fe;color:#6d28d9;border-radius:12px;padding:2px 10px;font-size:12px;font-weight:600">${escHtml(t)}<span onclick="_formTags.splice(${i},1);renderFormTags()" style="cursor:pointer;opacity:.6;font-size:14px;line-height:1">×</span></span>`).join('');
+}
+function handleTagInput(e){
+  if(e.key==='Enter'||e.key===','||e.key===';'){
+    e.preventDefault();
+    const val=e.target.value.trim().replace(/,|;/g,'');
+    if(val&&!_formTags.includes(val)){_formTags.push(val);renderFormTags();}
+    e.target.value='';
+  }
+}
 
 function addNote(contactId){
   const input=document.getElementById('note-input-'+contactId);
