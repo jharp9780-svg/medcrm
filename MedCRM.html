@@ -2124,6 +2124,25 @@ function runMigrations(){
       changed=true;
     }
   });
+  // Migrate Salesforce group labels → stage=Hired, clear org
+  const SF_GROUPS={
+    'top & joined neurologists':'Neurologist',
+    'top and joined neurologists':'Neurologist',
+    'top & joined hospitalists':'Hospitalist',
+    'top and joined hospitalists':'Hospitalist',
+    'top & joined intensivists':'Intensivist',
+    'top and joined intensivists':'Intensivist',
+  };
+  contacts.forEach(c=>{
+    const orgKey=(c.org||'').toLowerCase().trim();
+    const spec=SF_GROUPS[orgKey];
+    if(spec){
+      c.stage='Hired';
+      if(!c.specialty) c.specialty=spec;
+      c.org='';
+      changed=true;
+    }
+  });
   if(changed) saveAll();
 }
 
