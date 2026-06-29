@@ -2161,6 +2161,128 @@ function runMigrations(){
       changed=true;
     }
   });
+  // Auto-create hospital contacts from doctor email domains
+  const HOSP_DOMAINS={
+    'mayoclinic.org':'Mayo Clinic','mayo.edu':'Mayo Clinic',
+    'clevelandclinic.org':'Cleveland Clinic',
+    'hopkinsmedicine.org':'Johns Hopkins Medicine','johnshopkins.edu':'Johns Hopkins Medicine',
+    'ucsf.edu':'UCSF Medical Center','ucsfhealth.org':'UCSF Medical Center',
+    'stanfordhealthcare.org':'Stanford Health Care','stanford.edu':'Stanford Medicine',
+    'massgeneral.org':'Massachusetts General Hospital',
+    'brighamandwomens.org':"Brigham and Women's Hospital",
+    'partners.org':'Mass General Brigham','mgb.org':'Mass General Brigham',
+    'nyulangone.org':'NYU Langone Health','nyu.edu':'NYU Langone Health',
+    'mountsinai.org':'Mount Sinai Health System',
+    'northwell.edu':'Northwell Health',
+    'cedars-sinai.org':'Cedars-Sinai Medical Center','csmc.edu':'Cedars-Sinai Medical Center',
+    'upmc.edu':'UPMC',
+    'emory.edu':'Emory Healthcare','emoryhealthcare.org':'Emory Healthcare',
+    'duke.edu':'Duke University Health System','dukehealth.org':'Duke University Health System',
+    'vanderbilt.edu':'Vanderbilt University Medical Center','vumc.org':'Vanderbilt University Medical Center',
+    'utsouthwestern.edu':'UT Southwestern Medical Center',
+    'uab.edu':'UAB Medicine','uabmedicine.org':'UAB Medicine',
+    'wustl.edu':'Barnes-Jewish / Wash U','bjc.org':'BJC HealthCare',
+    'nm.org':'Northwestern Medicine','northwestern.edu':'Northwestern Medicine',
+    'rush.edu':'Rush University Medical Center',
+    'uchicago.edu':'UChicago Medicine','uchicagomedicine.org':'UChicago Medicine',
+    'geisinger.edu':'Geisinger Health','geisinger.org':'Geisinger Health',
+    'umassmemorial.org':'UMass Memorial Health','umassmed.edu':'UMass Memorial Health',
+    'bmc.org':'Boston Medical Center',
+    'tuftsmedicalcenter.org':'Tufts Medical Center',
+    'lahey.org':'Lahey Hospital','baystatehealth.org':'Baystate Health',
+    'dartmouth.edu':'Dartmouth-Hitchcock Medical Center','dhmc.org':'Dartmouth-Hitchcock Medical Center',
+    'yale.edu':'Yale New Haven Health','ynhh.org':'Yale New Haven Hospital',
+    'hartfordhealthcare.org':'Hartford HealthCare',
+    'nyp.org':'NewYork-Presbyterian','cornellmed.edu':'Weill Cornell Medicine',
+    'columbia.edu':'Columbia University Irving Medical Center',
+    'montefiore.org':'Montefiore Health System',
+    'sunysb.edu':'Stony Brook Medicine','stonybrookmedicine.edu':'Stony Brook Medicine',
+    'urmc.rochester.edu':'University of Rochester Medical Center',
+    'mcw.edu':'Medical College of Wisconsin','froedtert.com':'Froedtert Health',
+    'medstar.net':'MedStar Health','inova.org':'Inova Health System',
+    'vcu.edu':'VCU Health','vcuhealth.org':'VCU Health',
+    'uva.edu':'UVA Health',
+    'wakehealth.edu':'Wake Forest Baptist Health','wfubmc.edu':'Wake Forest Baptist Medical Center',
+    'atriumhealth.org':'Atrium Health','carolinashealthcare.org':'Atrium Health',
+    'novant.org':'Novant Health','wellstar.org':'WellStar Health System',
+    'emoryuniversity.edu':'Emory University',
+    'ufl.edu':'UF Health','ufhealth.org':'UF Health',
+    'jacksonhealth.org':'Jackson Health System',
+    'adventhealth.com':'AdventHealth','orlandohealth.com':'Orlando Health',
+    'usf.edu':'USF Health','miami.edu':'University of Miami Health','umiamihealth.org':'University of Miami Health',
+    'jefferson.edu':'Jefferson Health',
+    'pennmedicine.upenn.edu':'Penn Medicine','uphs.upenn.edu':'Penn Medicine',
+    'lifespan.org':'Lifespan Health System',
+    'ohsu.edu':'OHSU Health',
+    'uwmedicine.org':'UW Medicine','uw.edu':'UW Medicine',
+    'swedish.org':'Swedish Medical Group',
+    'providence.org':'Providence','peacehealth.org':'PeaceHealth',
+    'kaiserpermanente.org':'Kaiser Permanente','kp.org':'Kaiser Permanente',
+    'sutterhealth.org':'Sutter Health','dignityhealth.org':'Dignity Health',
+    'ucdavis.edu':'UC Davis Health','uci.edu':'UC Irvine Health',
+    'uclahealth.org':'UCLA Health','ucsd.edu':'UC San Diego Health',
+    'scrippshealth.org':'Scripps Health','sharp.com':'Sharp HealthCare',
+    'llu.edu':'Loma Linda University Health',
+    'osumc.edu':'Ohio State Wexner Medical Center','ohiohealth.com':'OhioHealth',
+    'uhhospitals.org':'University Hospitals','metrohealth.org':'MetroHealth',
+    'henryford.com':'Henry Ford Health','beaumont.org':'Corewell Health',
+    'corewellhealth.org':'Corewell Health','spectrumhealth.org':'Corewell Health',
+    'allina.com':'Allina Health','fairview.org':'M Health Fairview',
+    'healthpartners.com':'HealthPartners','sanfordhealth.org':'Sanford Health',
+    'unitypoint.org':'UnityPoint Health',
+    'uiowa.edu':'University of Iowa Health Care','uihc.org':'University of Iowa Hospitals',
+    'nebraskamed.com':'Nebraska Medicine','unmc.edu':'University of Nebraska Medical Center',
+    'kumed.com':'University of Kansas Health System',
+    'bswhealth.com':'Baylor Scott & White Health','bcm.edu':'Baylor College of Medicine',
+    'houstonmethodist.org':'Houston Methodist','memorialhermann.org':'Memorial Hermann',
+    'utmb.edu':'UTMB Health','uthealth.edu':'UTHealth Houston',
+    'mdanderson.org':'MD Anderson Cancer Center',
+    'utsystem.edu':'UT Health','texashealth.org':'Texas Health Resources',
+    'texaschildrens.org':"Texas Children's Hospital",
+    'parklandhospital.com':'Parkland Health',
+    'ucdenver.edu':'UCHealth / CU Medicine','uchealth.org':'UCHealth',
+    'ochsner.org':'Ochsner Health','tulane.edu':'Tulane Medical Center',
+    'lsuhsc.edu':'LSU Health','umc.edu':'University of Mississippi Medical Center',
+    'uams.edu':'UAMS Health','erlanger.org':'Erlanger Health System',
+    'methodisthealth.com':'Methodist Le Bonheur Healthcare',
+    'hschealth.com':'HCA Healthcare','hcahealthcare.com':'HCA Healthcare',
+    'commonspirit.org':'CommonSpirit Health','ascension.org':'Ascension Health',
+    'trinityhealth.org':'Trinity Health','mercyhealth.com':'Mercy Health',
+    'mercy.net':'Mercy','ssm.com':'SSM Health','ssmhealth.com':'SSM Health',
+    'bmcjax.com':'Baptist Medical Center Jacksonville',
+    'baptisthealth.net':'Baptist Health','baptisthealth.com':'Baptist Health',
+  };
+  // Heuristic: if domain contains medical keywords, infer name from domain
+  const MEDICAL_KEYWORDS=/hospital|health|medical|medicine|clinic|care|med\.|ortho|neuro|cardio|onco|pediatric|surg/i;
+  function domainToHospitalName(domain){
+    if(HOSP_DOMAINS[domain]) return HOSP_DOMAINS[domain];
+    if(!MEDICAL_KEYWORDS.test(domain)) return null;
+    // Infer name: strip TLD, replace hyphens/dots, title-case
+    const base=domain.replace(/\.(org|com|edu|net|gov|us)$/,'').replace(/[-_.]/g,' ');
+    return base.split(' ').map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(' ');
+  }
+  const existingHospNames=new Set(contacts.filter(c=>c.type==='hospital').map(c=>(c.name||'').toLowerCase()));
+  const newHospitals={};
+  contacts.forEach(c=>{
+    if(c.type!=='doctor') return;
+    [c.email,c.email2].forEach(email=>{
+      if(!email||!email.includes('@')) return;
+      const domain=email.split('@')[1].toLowerCase().trim();
+      const hospName=domainToHospitalName(domain);
+      if(!hospName) return;
+      if(!existingHospNames.has(hospName.toLowerCase())&&!newHospitals[hospName.toLowerCase()]){
+        newHospitals[hospName.toLowerCase()]={id:uid(),created:Date.now(),name:hospName,type:'hospital',stage:'Prospect',org:'',jobtitle:'',specialty:'',serviceLine:'',phone:'',email:'',email2:'',location:'',referral:'Auto-detected from doctor email',followup:'',notes:'',tags:[]};
+      }
+      // Link doctor to hospital via org field (if not already set)
+      if(!c.org) c.org=hospName;
+    });
+  });
+  const newHospArr=Object.values(newHospitals);
+  if(newHospArr.length){
+    newHospArr.forEach(h=>contacts.push(h));
+    changed=true;
+  }
+
   // Migrate Salesforce group labels → stage=Hired, clear org
   const SF_GROUPS={
     'top & joined neurologists':'Neurologist',
