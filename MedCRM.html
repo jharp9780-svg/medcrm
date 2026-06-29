@@ -1654,9 +1654,18 @@ function saveContact(){
     phone:document.getElementById('f-phone').value.trim(),email:document.getElementById('f-email').value.trim(),email2:document.getElementById('f-email2').value.trim(),
     location:document.getElementById('f-location').value.trim(),referral:document.getElementById('f-referral').value.trim(),
     followup:document.getElementById('f-followup').value,notes:document.getElementById('f-notes').value.trim(),tags:[..._formTags]};
-  if(id){const i=contacts.findIndex(x=>x.id===id);if(i>=0) contacts[i]={...contacts[i],...data};}
-  else contacts.push({id:uid(),created:Date.now(),...data});
-  saveAll();closeModal('contact-modal');render();
+  if(id){
+    const i=contacts.findIndex(x=>x.id===id);
+    if(i>=0){
+      contacts[i]={...contacts[i],...data};
+      _db.ref('contacts/'+i).set(contacts[i]);
+    }
+  } else {
+    const newC={id:uid(),created:Date.now(),...data};
+    contacts.push(newC);
+    _db.ref('contacts/'+(contacts.length-1)).set(newC);
+  }
+  closeModal('contact-modal');render();
   toast(`✓ ${name} saved.`);
 }
 
