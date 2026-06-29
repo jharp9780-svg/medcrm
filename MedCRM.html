@@ -232,6 +232,10 @@ textarea{resize:vertical;min-height:80px}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Contacts
         <span class="nav-count" id="nav-count-contacts">0</span>
       </div>
+      <div class="nav-item" onclick="showView('doctors')" id="nav-doctors">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Doctors
+        <span class="nav-count" id="nav-count-doctors">0</span>
+      </div>
       <div class="nav-item" onclick="showView('orgs')" id="nav-orgs">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Organizations
         <span class="nav-count" id="nav-count-orgs">0</span>
@@ -311,9 +315,13 @@ textarea{resize:vertical;min-height:80px}
         </div>
       </div>
       <div class="form-row">
-        <div class="form-group">
+        <div class="form-group" id="f-specialty-group">
           <label>Medical Specialty</label>
           <select id="f-specialty"><option value="">— Select specialty —</option></select>
+        </div>
+        <div class="form-group" id="f-serviceline-group" style="display:none">
+          <label>Service Line <span style="font-weight:400;color:var(--gray)">(optional)</span></label>
+          <input type="text" id="f-serviceline" placeholder="e.g. ICU, Hospitalist, Neurology…">
         </div>
       </div>
       <div class="form-row">
@@ -695,6 +703,7 @@ function render(){
   updateNavCounts();
   if(currentView==='dashboard') renderDashboard();
   else if(currentView==='contacts') renderContacts();
+  else if(currentView==='doctors') renderDoctors();
   else if(currentView==='orgs') renderOrganizations();
   else if(currentView==='pipeline') renderPipeline();
   else if(currentView==='activity') renderActivity();
@@ -702,6 +711,8 @@ function render(){
 }
 function updateNavCounts(){
   document.getElementById('nav-count-contacts').textContent=contacts.length;
+  const doctorCount=contacts.filter(c=>c.type==='doctor').length;
+  document.getElementById('nav-count-doctors').textContent=doctorCount;
   const orgCount=new Set(contacts.map(c=>c.org).filter(o=>o&&!isUnspecifiedOrg(o))).size;
   document.getElementById('nav-count-orgs').textContent=orgCount;
   // Use cached dup count — recalculated only after saves, not on every nav click
@@ -921,11 +932,18 @@ function renderContacts(){
       <span style="font-size:12px;color:var(--gray);margin-left:4px">${list.length} contact${list.length!==1?'s':''}</span>
     </div>
 
+    <div id="bulk-bar" style="display:none;position:sticky;top:0;z-index:50;background:#1e40af;color:#fff;padding:10px 16px;border-radius:8px;margin-bottom:8px;display:none;align-items:center;gap:12px">
+      <span id="bulk-count" style="font-size:13px;font-weight:600"></span>
+      <input id="bulk-tag-input" type="text" placeholder="Type a tag and press Enter…" style="flex:1;padding:6px 10px;border-radius:6px;border:none;font-size:13px;outline:none;color:#1e293b">
+      <button class="btn" style="background:#fff;color:#1e40af;font-weight:600" onclick="applyBulkTag()">Apply Tag</button>
+      <button class="btn" style="background:#3b82f6;color:#fff;border:none" onclick="clearBulkSelection()">Cancel</button>
+    </div>
     <div class="card">
       <div class="table-wrap">
         ${list.length?`<table>
-          <thead><tr><th>Name</th><th>Type</th><th>Organization</th><th>Job Title</th><th>Medical Specialty</th><th>Location</th><th>Stage</th><th>Follow-up</th><th></th></tr></thead>
+          <thead><tr><th style="width:32px"><input type="checkbox" id="select-all-cb" onclick="toggleSelectAll(this)" title="Select all on this page"></th><th>Name</th><th>Type</th><th>Organization</th><th>Job Title</th><th>Medical Specialty</th><th>Location</th><th>Stage</th><th>Follow-up</th><th></th></tr></thead>
           <tbody>${pageList.map(c=>`<tr class="clickable" onclick="openDetail('${c.id}')">
+            <td onclick="event.stopPropagation()"><input type="checkbox" class="bulk-cb" value="${c.id}" onchange="updateBulkBar()"></td>
             <td>
               <strong>${escHtml(c.name)}</strong>
               ${c.email?`<div style="font-size:11px;color:var(--blue)">${escHtml(c.email)}</div>`:''}
@@ -983,6 +1001,94 @@ function quickStageChange(id,stage){
 // ══════════════════════════════════════════════
 // PIPELINE
 // ══════════════════════════════════════════════
+function renderDoctors(){
+  const doctors=contacts.filter(c=>c.type==='doctor');
+  const hired=doctors.filter(c=>c.stage==='Hired');
+  const pipeline=doctors.filter(c=>c.stage!=='Hired');
+
+  const MAIN_SPECS=['Neurologist','Hospitalist','Intensivist'];
+  const allSpecs=s=>([...new Set([...MAIN_SPECS,...s.map(c=>c.specialty||'No Specialty')])]).filter(sp=>s.some(c=>(c.specialty||'No Specialty')===sp));
+
+  const rowTH=`<thead><tr>
+    <th style="padding:8px 16px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--gray);background:#f8fafc;border-bottom:1px solid var(--border)">Name</th>
+    <th style="padding:8px 16px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--gray);background:#f8fafc;border-bottom:1px solid var(--border)">Phone</th>
+    <th style="padding:8px 16px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--gray);background:#f8fafc;border-bottom:1px solid var(--border)">Location</th>
+    <th style="padding:8px 16px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--gray);background:#f8fafc;border-bottom:1px solid var(--border)">Stage</th>
+  </tr></thead>`;
+  const makeRows=arr=>arr.map(c=>`<tr class="clickable" onclick="openDetail('${c.id}')">
+    <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9">
+      <strong style="font-size:13px">${escHtml(c.name)}</strong>
+      ${c.email?`<div style="font-size:11px;color:var(--blue)">${escHtml(c.email)}</div>`:''}
+    </td>
+    <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9;font-size:12px;color:#374151">${escHtml(c.phone||'—')}</td>
+    <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9;font-size:12px;color:#374151">${escHtml(c.location||'—')}</td>
+    <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9"><span class="badge ${STAGE_COLORS[c.stage]||'badge-gray'}">${c.stage}</span></td>
+  </tr>`).join('');
+
+  const makeSpecSections=(group,idPrefix,headerBg,headerColor,borderColor)=>{
+    const specs=allSpecs(group);
+    return specs.map((spec,si)=>{
+      const grp=group.filter(c=>(c.specialty||'No Specialty')===spec);
+      const emoji=SPEC_EMOJI[spec]||'⚕️';
+      return `<div style="border-top:${si>0?'2px solid var(--border)':'none'}">
+        <div style="padding:8px 16px 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:${headerColor};background:${headerBg};border-bottom:1px solid ${borderColor}">
+          ${emoji} ${escHtml(spec)}s (${grp.length})
+        </div>
+        <table style="width:100%;border-collapse:collapse">${rowTH}<tbody>${makeRows(grp)}</tbody></table>
+      </div>`;
+    }).join('');
+  };
+
+  const hiredCard=hired.length?`<div class="card" style="border-left:4px solid #16a34a">
+    <div class="card-header" style="cursor:pointer;background:#f0fdf4" onclick="toggleOrg('hired-card')">
+      <div style="display:flex;align-items:center;gap:10px;width:100%">
+        <div style="width:36px;height:36px;border-radius:8px;background:#dcfce7;color:#16a34a;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">✓</div>
+        <div style="flex:1">
+          <div style="font-size:15px;font-weight:700;color:#15803d">Doctors With Us — Hired</div>
+          <div style="font-size:11px;color:#16a34a;margin-top:1px">${hired.length} doctors currently working with RICU Ops</div>
+        </div>
+        <svg id="chevron-hired-card" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transition:transform .2s;color:#16a34a"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+    </div>
+    <div id="org-body-hired-card" style="display:none">
+      ${makeSpecSections(hired,'hired','#f0fdf4','#16a34a','#bbf7d0')}
+    </div>
+  </div>`:'';
+
+  const pipelineBySpec=allSpecs(pipeline);
+  const pipelineCards=pipelineBySpec.map((spec,si)=>{
+    const grp=pipeline.filter(c=>(c.specialty||'No Specialty')===spec);
+    const emoji=SPEC_EMOJI[spec]||'⚕️';
+    const cardId='pipe-spec-'+si;
+    return `<div class="card">
+      <div class="card-header" style="cursor:pointer" onclick="toggleOrg('${cardId}')">
+        <div style="display:flex;align-items:center;gap:10px;width:100%">
+          <div style="width:36px;height:36px;border-radius:8px;background:#eff6ff;color:#1d4ed8;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">${emoji}</div>
+          <div style="flex:1">
+            <div style="font-size:14px;font-weight:700;color:#1e293b">${escHtml(spec)}s — Pipeline</div>
+            <div style="font-size:11px;color:var(--gray);margin-top:1px">${grp.length} doctors in progress</div>
+          </div>
+          <svg id="chevron-${cardId}" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transition:transform .2s;color:var(--gray)"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+      </div>
+      <div id="org-body-${cardId}" style="display:none">
+        <table style="width:100%;border-collapse:collapse">${rowTH}<tbody>${makeRows(grp)}</tbody></table>
+      </div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('content').innerHTML=`
+    <div style="margin-bottom:16px;font-size:13px;color:var(--gray)">
+      <strong style="color:#1e293b">${doctors.length}</strong> doctors total &nbsp;·&nbsp;
+      <strong style="color:#16a34a">${hired.length}</strong> hired &nbsp;·&nbsp;
+      <strong style="color:#1d4ed8">${pipeline.length}</strong> in pipeline
+    </div>
+    ${hiredCard}
+    ${hired.length&&pipeline.length?'<div style="margin:8px 0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--gray)">Pipeline</div>':''}
+    <div style="display:flex;flex-direction:column;gap:12px">${pipelineCards}</div>
+  `;
+}
+
 function renderOrganizations(){
   const orgSearch=(document.getElementById('global-search')?.value||'').toLowerCase();
   // Group contacts by org
@@ -1014,9 +1120,8 @@ function renderOrganizations(){
   const pageOrgs=orgs.slice(orgsPage*ORGS_PAGE_SIZE,(orgsPage+1)*ORGS_PAGE_SIZE);
 
   document.getElementById('content').innerHTML=`
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:16px;font-size:13px;color:var(--gray)">
-      <div><strong style="color:#1e293b">${orgs.length}</strong> organizations &nbsp;·&nbsp; <strong style="color:#1e293b">${contacts.filter(c=>c.org).length}</strong> contacts with org</div>
-      <div style="text-align:right"><strong style="color:var(--amber)">${individuals.length}</strong> individual doctors (no organization — potential job candidates)</div>
+    <div style="margin-bottom:16px;font-size:13px;color:var(--gray)">
+      <strong style="color:#1e293b">${orgs.length}</strong> organizations &nbsp;·&nbsp; <strong style="color:#1e293b">${contacts.filter(c=>c.type==='hospital'||c.org).length}</strong> contacts with org
     </div>
 
     ${totalOrgPages>1?`<div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
@@ -1049,82 +1154,58 @@ function renderOrganizations(){
         <div id="org-body-${idx}" style="display:none">${(()=>{
           const clinical=members.filter(c=>c.specialty);
           const admin=members.filter(c=>!c.specialty);
-          const colTH=`<thead><tr>
+          const docTH=`<thead><tr>
+              <th style="padding:8px 16px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--gray);background:#f8fafc;border-bottom:1px solid var(--border)">Name</th>
+              <th style="padding:8px 16px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--gray);background:#f8fafc;border-bottom:1px solid var(--border)">Phone</th>
+              <th style="padding:8px 16px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--gray);background:#f8fafc;border-bottom:1px solid var(--border)">Location</th>
+              <th style="padding:8px 16px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--gray);background:#f8fafc;border-bottom:1px solid var(--border)">Stage</th>
+            </tr></thead>`;
+          const makeDocRows=arr=>arr.map(c=>`<tr class="clickable" onclick="openDetail('${c.id}')">
+              <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9">
+                <strong style="font-size:13px">${escHtml(c.name)}</strong>
+                ${c.email?`<div style="font-size:11px;color:var(--blue)">${escHtml(c.email)}</div>`:''}
+              </td>
+              <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9;font-size:12px;color:#374151">${escHtml(c.phone||'—')}</td>
+              <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9;font-size:12px;color:#374151">${escHtml(c.location||'—')}</td>
+              <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9"><span class="badge ${STAGE_COLORS[c.stage]||'badge-gray'}">${c.stage}</span></td>
+            </tr>`).join('');
+          const adminTH=`<thead><tr>
               <th style="padding:8px 16px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--gray);background:#f8fafc;border-bottom:1px solid var(--border)">Name</th>
               <th style="padding:8px 16px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--gray);background:#f8fafc;border-bottom:1px solid var(--border)">Job Title</th>
-              <th style="padding:8px 16px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--gray);background:#f8fafc;border-bottom:1px solid var(--border)">Specialty</th>
               <th style="padding:8px 16px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--gray);background:#f8fafc;border-bottom:1px solid var(--border)">Phone</th>
               <th style="padding:8px 16px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--gray);background:#f8fafc;border-bottom:1px solid var(--border)">Stage</th>
             </tr></thead>`;
-          const makeOrgRows=arr=>arr.map(c=>`<tr class="clickable" onclick="openDetail('${c.id}')">
+          const makeAdminRows=arr=>arr.map(c=>`<tr class="clickable" onclick="openDetail('${c.id}')">
               <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9">
                 <strong style="font-size:13px">${escHtml(c.name)}</strong>
                 ${c.email?`<div style="font-size:11px;color:var(--blue)">${escHtml(c.email)}</div>`:''}
               </td>
               <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9;font-size:12px;color:#374151">${escHtml(c.jobtitle||'—')}</td>
-              <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9">${specBadge(c.specialty)}</td>
               <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9;font-size:12px;color:#374151">${escHtml(c.phone||'—')}</td>
               <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9"><span class="badge ${STAGE_COLORS[c.stage]||'badge-gray'}">${c.stage}</span></td>
             </tr>`).join('');
           let shtml='';
           if(clinical.length){
-            shtml+=`<div style="padding:8px 16px 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#0369a1;background:#f0f9ff;border-bottom:1px solid #bae6fd">🏥 Clinical Staff (${clinical.length})</div>`;
-            shtml+=`<table style="width:100%;border-collapse:collapse">${colTH}<tbody>${makeOrgRows(clinical)}</tbody></table>`;
+            const bySpec={};
+            clinical.forEach(c=>{const s=c.specialty||'Other';if(!bySpec[s])bySpec[s]=[];bySpec[s].push(c);});
+            Object.keys(bySpec).sort().forEach((spec,si)=>{
+              const grp=bySpec[spec];
+              const hired=grp.filter(c=>c.stage==='Hired').length;
+              const emoji=SPEC_EMOJI[spec]||'⚕️';
+              shtml+=`<div style="padding:8px 16px 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#0369a1;background:#f0f9ff;border-bottom:1px solid #bae6fd;${si>0?'border-top:2px solid var(--border)':''}">
+                ${emoji} ${escHtml(spec)}s — ${grp.length} total${hired?` · <span style="color:#16a34a">${hired} hired ✓</span>`:''}
+              </div>`;
+              shtml+=`<table style="width:100%;border-collapse:collapse">${docTH}<tbody>${makeDocRows(grp)}</tbody></table>`;
+            });
           }
           if(admin.length){
             shtml+=`<div style="padding:8px 16px 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#7c3aed;background:#faf5ff;border-bottom:1px solid #e9d5ff;${clinical.length?'border-top:2px solid var(--border)':''}">💼 Administrative Contacts (${admin.length})</div>`;
-            shtml+=`<table style="width:100%;border-collapse:collapse">${colTH}<tbody>${makeOrgRows(admin)}</tbody></table>`;
+            shtml+=`<table style="width:100%;border-collapse:collapse">${adminTH}<tbody>${makeAdminRows(admin)}</tbody></table>`;
           }
           return shtml;
         })()}</div>
       </div>`;
     }).join('')}
-
-    ${individuals.length?`
-    <div class="card" style="border-color:#fcd34d">
-      <div class="card-header" style="background:#fffbeb;cursor:pointer" onclick="toggleOrg('ind')">
-        <div style="display:flex;align-items:center;gap:10px;width:100%">
-          <div style="width:36px;height:36px;border-radius:8px;background:#fef3c7;color:#b45309;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">👤</div>
-          <div style="flex:1">
-            <div style="font-size:14px;font-weight:700;color:#1e293b">Individual Doctors — No Organization</div>
-            <div style="font-size:11px;color:var(--amber)">Doctors looking for a job with you — org listed as "Unspecified"</div>
-          </div>
-          <span style="font-size:12px;color:var(--gray);flex-shrink:0">${individuals.length} contacts</span>
-          <svg id="chevron-ind" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transition:transform .2s;color:var(--gray)"><polyline points="6 9 12 15 18 9"/></svg>
-        </div>
-      </div>
-      <div id="org-body-ind" style="display:none">${(()=>{
-        const indClinical=individuals.filter(c=>c.specialty);
-        const indAdmin=individuals.filter(c=>!c.specialty);
-        const indTH=`<thead><tr>
-            <th style="padding:8px 16px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--gray);background:#f8fafc;border-bottom:1px solid var(--border)">Name</th>
-            <th style="padding:8px 16px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--gray);background:#f8fafc;border-bottom:1px solid var(--border)">Job Title</th>
-            <th style="padding:8px 16px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--gray);background:#f8fafc;border-bottom:1px solid var(--border)">Specialty</th>
-            <th style="padding:8px 16px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--gray);background:#f8fafc;border-bottom:1px solid var(--border)">Location</th>
-            <th style="padding:8px 16px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--gray);background:#f8fafc;border-bottom:1px solid var(--border)">Stage</th>
-          </tr></thead>`;
-        const makeIndRows=arr=>arr.map(c=>`<tr class="clickable" onclick="openDetail('${c.id}')">
-            <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9">
-              <strong style="font-size:13px">${escHtml(c.name)}</strong>
-              ${c.email?`<div style="font-size:11px;color:var(--blue)">${escHtml(c.email)}</div>`:''}
-            </td>
-            <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9;font-size:12px;color:#374151">${escHtml(c.jobtitle||'—')}</td>
-            <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9">${specBadge(c.specialty)}</td>
-            <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9;font-size:12px;color:#374151">${escHtml(c.location||'—')}</td>
-            <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9"><span class="badge ${STAGE_COLORS[c.stage]||'badge-gray'}">${c.stage}</span></td>
-          </tr>`).join('');
-        let ihtml='';
-        if(indClinical.length){
-          ihtml+=`<div style="padding:8px 16px 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#0369a1;background:#f0f9ff;border-bottom:1px solid #bae6fd">🏥 Clinical Staff — Doctors with Specialty (${indClinical.length})</div>`;
-          ihtml+=`<table style="width:100%;border-collapse:collapse">${indTH}<tbody>${makeIndRows(indClinical)}</tbody></table>`;
-        }
-        if(indAdmin.length){
-          ihtml+=`<div style="padding:8px 16px 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#7c3aed;background:#faf5ff;border-bottom:1px solid #e9d5ff;${indClinical.length?'border-top:2px solid var(--border)':''}">💼 Other / Administrative (${indAdmin.length})</div>`;
-          ihtml+=`<table style="width:100%;border-collapse:collapse">${indTH}<tbody>${makeIndRows(indAdmin)}</tbody></table>`;
-        }
-        return ihtml;
-      })()}</div>
-    </div>`:''}
 
     ${totalOrgPages>1?`<div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-top:12px">
       <button class="btn btn-secondary btn-sm" onclick="orgsPage--;renderOrganizations()" ${orgsPage===0?'disabled':''}>← Prev</button>
@@ -1319,6 +1400,7 @@ function buildDetailBody(id){
         </div>
         <div style="display:flex;flex-direction:column;gap:10px;font-size:12px">
           ${c.org&&c.type==='hospital'?field('Organization',escHtml(c.org)):''}
+          ${c.serviceLine&&c.type==='hospital'?field('Service Line',escHtml(c.serviceLine)):''}
           ${c.phone?field('Phone',`<a href="tel:${c.phone}" style="color:var(--blue)">${escHtml(c.phone)}</a>`):''}
           ${c.email?field('Email',`<a href="mailto:${c.email}" style="color:var(--blue)">${escHtml(c.email)}</a>`):''}
           ${c.email2?field('Email 2',`<a href="mailto:${c.email2}" style="color:var(--blue)">${escHtml(c.email2)}</a>`):''}
@@ -1477,6 +1559,10 @@ function updateStageOptions(type,selectedStage=''){
   sel.innerHTML=stages.map(s=>`<option value="${s}"${s===selectedStage?' selected':''}>${s}</option>`).join('');
   const orgGroup=document.getElementById('f-org-group');
   if(orgGroup) orgGroup.style.display=type==='hospital'?'':'none';
+  const specGroup=document.getElementById('f-specialty-group');
+  if(specGroup) specGroup.style.display=type==='doctor'?'':'none';
+  const slGroup=document.getElementById('f-serviceline-group');
+  if(slGroup) slGroup.style.display=type==='hospital'?'':'none';
 }
 
 function openAddContact(prefill={}){
@@ -1489,6 +1575,7 @@ function openAddContact(prefill={}){
   document.getElementById('f-jobtitle').value=prefill.jobtitle||'';
   populateSpecialtySelect(prefill.specialty||'');
   document.getElementById('f-org').value=prefill.org||'';
+  document.getElementById('f-serviceline').value=prefill.serviceLine||'';
   document.getElementById('f-phone').value=prefill.phone||'';
   document.getElementById('f-email').value=prefill.email||'';
   document.getElementById('f-email2').value=prefill.email2||'';
@@ -1521,7 +1608,7 @@ function saveContact(){
   const id=document.getElementById('edit-id').value;
   const data={type:document.getElementById('f-type').value,stage:document.getElementById('f-stage').value,name,
     jobtitle:document.getElementById('f-jobtitle').value.trim(),
-    specialty:document.getElementById('f-specialty').value,org:document.getElementById('f-org').value.trim(),
+    specialty:document.getElementById('f-specialty').value,serviceLine:document.getElementById('f-serviceline').value.trim(),org:document.getElementById('f-org').value.trim(),
     phone:document.getElementById('f-phone').value.trim(),email:document.getElementById('f-email').value.trim(),email2:document.getElementById('f-email2').value.trim(),
     location:document.getElementById('f-location').value.trim(),referral:document.getElementById('f-referral').value.trim(),
     followup:document.getElementById('f-followup').value,notes:document.getElementById('f-notes').value.trim(),tags:[..._formTags]};
@@ -2099,6 +2186,43 @@ function renderEmailsTab(contact,id){
   });
 }
 function injectOutlookBtn(){}
+
+// ── BULK SELECTION ──
+function getCheckedIds(){return [...document.querySelectorAll('.bulk-cb:checked')].map(cb=>cb.value);}
+function updateBulkBar(){
+  const ids=getCheckedIds();
+  const bar=document.getElementById('bulk-bar');
+  if(!bar) return;
+  if(ids.length>0){bar.style.display='flex';document.getElementById('bulk-count').textContent=ids.length+' selected';}
+  else{bar.style.display='none';}
+}
+function toggleSelectAll(cb){
+  document.querySelectorAll('.bulk-cb').forEach(c=>c.checked=cb.checked);
+  updateBulkBar();
+}
+function clearBulkSelection(){
+  document.querySelectorAll('.bulk-cb').forEach(c=>c.checked=false);
+  const cb=document.getElementById('select-all-cb');
+  if(cb) cb.checked=false;
+  const bar=document.getElementById('bulk-bar');
+  if(bar) bar.style.display='none';
+}
+function applyBulkTag(){
+  const tag=document.getElementById('bulk-tag-input').value.trim();
+  if(!tag){toast('Type a tag name first.');return;}
+  const ids=getCheckedIds();
+  if(!ids.length){toast('No contacts selected.');return;}
+  ids.forEach(id=>{
+    const c=contacts.find(x=>x.id===id);
+    if(!c) return;
+    if(!Array.isArray(c.tags)) c.tags=[];
+    if(!c.tags.includes(tag)) c.tags.push(tag);
+  });
+  saveAll();
+  document.getElementById('bulk-tag-input').value='';
+  clearBulkSelection();
+  toast(`✓ Tag "${tag}" applied to ${ids.length} contact${ids.length>1?'s':''}.`);
+}
 
 // ── TAGS ──
 let _formTags=[];
