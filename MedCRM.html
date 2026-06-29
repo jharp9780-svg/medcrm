@@ -803,9 +803,9 @@ function findDuplicateGroups(){
       const bName=normalize(b.name);
       const bEmail=normalize(b.email);
       const sameEmail=aEmail&&bEmail&&aEmail===bEmail;
-      const sameName=aName&&bName&&aName===bName;
-      const similarName=aName&&bName&&aName.length>4&&(aName.includes(bName)||bName.includes(aName));
-      if(sameEmail||sameName||similarName){matches.push(b);used.add(b.id);}
+      const sameName=aName&&bName&&aName.length>5&&aName===bName;
+      // Only flag as duplicate if email matches OR full name is identical
+      if(sameEmail||sameName){matches.push(b);used.add(b.id);}
     }
     if(matches.length>1){
       matches.forEach(m=>used.add(m.id));
