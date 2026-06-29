@@ -1800,7 +1800,7 @@ function updateStageOptions(type,selectedStage=''){
   const stages=stagesFor(type);
   sel.innerHTML=stages.map(s=>`<option value="${s}"${s===selectedStage?' selected':''}>${s}</option>`).join('');
   const orgGroup=document.getElementById('f-org-group');
-  if(orgGroup) orgGroup.style.display=type==='hospital'?'':'none';
+  if(orgGroup) orgGroup.style.display=type==='hospital'?'none':'';
   const specGroup=document.getElementById('f-specialty-group');
   if(specGroup) specGroup.style.display=type==='doctor'?'':'none';
   const slGroup=document.getElementById('f-serviceline-group');
