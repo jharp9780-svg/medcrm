@@ -1206,6 +1206,7 @@ function applyDQAction(id, action){
   if(action==='staff'){c.type='staff';c.specialty='';}
   else if(action==='hospital'){c.type='hospital';c.specialty='';}
   else if(action==='keep'){c._dqReviewed=true;}
+  else if(action==='hired'){c._dqReviewed=true;c.stage='Hired';}
   const i=contacts.indexOf(c);
   _db.ref('contacts/'+i).set(c);
   render();
@@ -1237,6 +1238,7 @@ function renderDataQuality(){
           <button class="btn btn-sm" style="background:#7c3aed;color:#fff;white-space:nowrap" onclick="applyDQAction('${c.id}','staff')">👤 Make Hospital Staff</button>
           <button class="btn btn-sm" style="background:#15803d;color:#fff;white-space:nowrap" onclick="applyDQAction('${c.id}','hospital')">🏥 Make Hospital (Org)</button>
           <button class="btn btn-secondary btn-sm" onclick="applyDQAction('${c.id}','keep')">✓ Keep as Doctor</button>
+          <button class="btn btn-secondary btn-sm" style="background:#0f766e;color:#fff;white-space:nowrap" onclick="applyDQAction('${c.id}','hired')">✓ Keep + Mark Hired</button>
         </div>
       </div>
     </div>`;
