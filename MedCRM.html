@@ -1213,9 +1213,33 @@ function applyDQAction(id, action){
   toast(`✓ Updated ${c.name}.`);
 }
 
+let _dqSelected=new Set();
+function dqToggle(id){if(_dqSelected.has(id))_dqSelected.delete(id);else _dqSelected.add(id);renderDataQuality();}
+function dqSelectAll(flagged){flagged.forEach(c=>_dqSelected.add(c.id));renderDataQuality();}
+function dqClearAll(){_dqSelected.clear();renderDataQuality();}
+function applyDQBulk(action){
+  const ids=[..._dqSelected];
+  ids.forEach(id=>{
+    const c=contacts.find(x=>x.id===id);
+    if(!c) return;
+    if(action==='staff'){c.type='staff';c.specialty='';}
+    else if(action==='hospital'){c.type='hospital';c.specialty='';}
+    else if(action==='keep'){c._dqReviewed=true;}
+    else if(action==='hired'){c._dqReviewed=true;c.stage='Hired';}
+    const i=contacts.indexOf(c);
+    _db.ref('contacts/'+i).set(c);
+  });
+  _dqSelected.clear();
+  render();
+  toast(`✓ Applied to ${ids.length} contacts`);
+}
+
+let _dqFlagged=[];
 function renderDataQuality(){
   const flagged=flaggedContacts().filter(c=>!c._dqReviewed);
+  _dqFlagged=flagged;
   const reviewed=contacts.filter(c=>c._dqReviewed).length;
+  const selCount=_dqSelected.size;
 
   const rows=flagged.map(c=>{
     const domain=(c.email||'').includes('@')?(c.email||'').split('@')[1]:'';
@@ -1224,8 +1248,10 @@ function renderDataQuality(){
     const reasons=[];
     if(hasAdminTitle) reasons.push(`Admin title: "${c.jobtitle}"`);
     if(hasHospEmail) reasons.push(`Institutional email: @${domain}`);
-    return `<div class="card" style="padding:14px 16px;border-left:4px solid #f59e0b">
+    const checked=_dqSelected.has(c.id)?'checked':'';
+    return `<div class="card" style="padding:14px 16px;border-left:4px solid ${_dqSelected.has(c.id)?'#3b82f6':'#f59e0b'}">
       <div style="display:flex;align-items:flex-start;gap:12px">
+        <input type="checkbox" ${checked} onchange="dqToggle('${c.id}')" style="margin-top:3px;width:16px;height:16px;cursor:pointer;flex-shrink:0">
         <div style="flex:1;min-width:0">
           <div style="font-size:14px;font-weight:700;color:#1e293b">${escHtml(c.name)}</div>
           <div style="font-size:12px;color:var(--gray);margin-top:2px">${escHtml(c.jobtitle||'No title')} ${c.specialty?'· '+escHtml(c.specialty):''}</div>
@@ -1244,6 +1270,17 @@ function renderDataQuality(){
     </div>`;
   }).join('');
 
+  const bulkBar=selCount>0?`
+    <div style="background:#1e40af;color:#fff;border-radius:8px;padding:10px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px">
+      <span style="font-weight:600;font-size:13px">${selCount} selected</span>
+      <button class="btn btn-sm" style="background:#7c3aed;color:#fff" onclick="applyDQBulk('staff')">👤 Make Hospital Staff</button>
+      <button class="btn btn-sm" style="background:#15803d;color:#fff" onclick="applyDQBulk('hospital')">🏥 Make Hospital (Org)</button>
+      <button class="btn btn-sm" style="background:#fff;color:#1e293b" onclick="applyDQBulk('keep')">✓ Keep as Doctor</button>
+      <button class="btn btn-sm" style="background:#0f766e;color:#fff" onclick="applyDQBulk('hired')">✓ Keep + Mark Hired</button>
+      <button class="btn btn-sm" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,0.4)" onclick="dqClearAll()">✕ Clear selection</button>
+    </div>`:
+    `<div style="margin-bottom:8px"><button class="btn btn-secondary btn-sm" style="font-size:12px" onclick="dqSelectAll(_dqFlagged)">Select all ${flagged.length}</button></div>`;
+
   document.getElementById('content').innerHTML=`
     <div style="margin-bottom:16px">
       <div style="font-size:13px;color:var(--gray);margin-bottom:4px">
@@ -1252,10 +1289,10 @@ function renderDataQuality(){
       </div>
       <div style="font-size:12px;color:var(--gray);background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;line-height:1.6">
         These are contacts currently tagged as <strong>Doctor</strong> but flagged because they have an administrative job title or an institutional email address — they may actually be hospital staff or administrators, not doctors you're recruiting.
-        <br>For each one: <strong>Make Hospital Staff</strong> if they're an individual at a hospital client · <strong>Make Hospital (Org)</strong> if the record should be the hospital itself · <strong>Keep as Doctor</strong> if they really are a doctor you're recruiting.
+        <br>Check the box on each card to select, then use the bulk action bar to apply one action to all selected.
       </div>
     </div>
-    ${flagged.length?`<div style="display:flex;flex-direction:column;gap:8px">${rows}</div>`:`
+    ${flagged.length?`${bulkBar}<div style="display:flex;flex-direction:column;gap:8px">${rows}</div>`:`
     <div class="empty">
       <div class="empty-icon">✅</div>
       <div class="empty-title">All contacts reviewed</div>
