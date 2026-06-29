@@ -76,6 +76,7 @@ tr:hover td{background:#f8fafc}
 .badge-purple{background:#ede9fe;color:#6d28d9}.badge-gray{background:#f1f5f9;color:#475569}
 .type-badge-doctor{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe}
 .type-badge-hospital{background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0}
+.type-badge-staff{background:#faf5ff;color:#7c3aed;border:1px solid #ddd6fe}
 
 /* Pipeline */
 .pipeline-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:24px}
@@ -256,6 +257,11 @@ textarea{resize:vertical;min-height:80px}
     </div>
     <div class="nav-section" style="border-top:1px solid #334155">
       <div class="nav-label">Tools</div>
+      <div class="nav-item" onclick="showView('dataquality')" id="nav-dataquality" style="color:#f59e0b">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        Data Quality
+        <span class="nav-count" id="nav-count-dq" style="background:#f59e0b;color:#fff">0</span>
+      </div>
       <div class="nav-item" onclick="showView('dedup')" id="nav-dedup">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
         Find Duplicates
@@ -304,7 +310,7 @@ textarea{resize:vertical;min-height:80px}
       <div class="form-row">
         <div class="form-group">
           <label>Type *</label>
-          <select id="f-type" onchange="updateStageOptions(this.value)"><option value="doctor">👨‍⚕️ Doctor (Recruiting)</option><option value="hospital">🏥 Hospital (Contract)</option></select>
+          <select id="f-type" onchange="updateStageOptions(this.value)"><option value="doctor">👨‍⚕️ Doctor (Recruiting)</option><option value="hospital">🏥 Hospital (Contract)</option><option value="staff">👤 Hospital Staff (Contact)</option></select>
         </div>
         <div class="form-group">
           <label>Pipeline Stage</label>
@@ -535,11 +541,12 @@ Referred by Dr. Marcus Lee" oninput="runSmartParse()"></textarea>
 // DATA LAYER
 // ══════════════════════════════════════════════
 // Doctor = recruiting pipeline; Hospital = contract sales pipeline
-const DOCTOR_STAGES=['Prospect','Reached Out','Intro Call Done','Application Sent','Interviewing','Offer Made','Hired','Not Interested'];
+const DOCTOR_STAGES=['Prospect','Reached Out','Intro Call Done','Contract Sent','Contract Signed','Client Interview','Hired','Not Interested'];
 const HOSPITAL_STAGES=['Prospect','Reached Out','Meeting Scheduled','Proposal Sent','Negotiating','Contract Signed','Not Interested'];
-const STAGES=[...new Set([...DOCTOR_STAGES,...HOSPITAL_STAGES])]; // union for filters/pipeline
-const STAGE_COLORS={'Prospect':'badge-gray','Reached Out':'badge-blue','Intro Call Done':'badge-blue','Meeting Scheduled':'badge-purple','Application Sent':'badge-purple','Interviewing':'badge-purple','Proposal Sent':'badge-amber','Negotiating':'badge-amber','Offer Made':'badge-amber','Contract Signed':'badge-green','Hired':'badge-green','Not Interested':'badge-red'};
-function stagesFor(type){return type==='hospital'?HOSPITAL_STAGES:DOCTOR_STAGES;}
+const STAFF_STAGES=['Active Contact','Reached Out','Met','Not Responsive','Not Interested'];
+const STAGES=[...new Set([...DOCTOR_STAGES,...HOSPITAL_STAGES,...STAFF_STAGES])];
+const STAGE_COLORS={'Prospect':'badge-gray','Reached Out':'badge-blue','Intro Call Done':'badge-blue','Contract Sent':'badge-purple','Contract Signed':'badge-amber','Client Interview':'badge-amber','Meeting Scheduled':'badge-purple','Proposal Sent':'badge-amber','Negotiating':'badge-amber','Offer Made':'badge-amber','Application Sent':'badge-purple','Interviewing':'badge-purple','Hired':'badge-green','Not Interested':'badge-red','Active Contact':'badge-blue','Met':'badge-purple','Not Responsive':'badge-gray'};
+function stagesFor(type){return type==='hospital'?HOSPITAL_STAGES:type==='staff'?STAFF_STAGES:DOCTOR_STAGES;}
 const ACT_ICONS={call:'📞',email:'✉️',meeting:'🤝',teams:'💻',note:'📝',doc:'📎'};
 const ACT_CLASSES={call:'act-call',email:'act-email',meeting:'act-meeting',teams:'act-meeting',note:'act-note',doc:'act-doc'};
 // Specialties: [name, color-class, emoji, description]
@@ -652,6 +659,17 @@ function saveAll(){
   _db.ref('documents').set(documents);
   invalidateCache();
 }
+// Fast single-record writes — use these instead of saveAll() wherever possible
+function saveContactById(id){
+  const i=contacts.findIndex(x=>x.id===id);
+  if(i>=0) _db.ref('contacts/'+i).set(contacts[i]);
+  invalidateCache();
+}
+function saveContactsOnly(){_db.ref('contacts').set(contacts);invalidateCache();}
+function saveDocById(id){
+  const i=documents.findIndex(x=>x.id===id);
+  if(i>=0) _db.ref('documents/'+i).set(documents[i]);
+}
 
 // Auth helpers
 function doLogin(){
@@ -742,6 +760,7 @@ function render(){
   else if(currentView==='contacts') renderContacts();
   else if(currentView==='doctors') renderDoctors();
   else if(currentView==='lusha') renderLusha();
+  else if(currentView==='dataquality') renderDataQuality();
   else if(currentView==='orgs') renderOrganizations();
   else if(currentView==='pipeline') renderPipeline();
   else if(currentView==='activity') renderActivity();
@@ -751,6 +770,9 @@ function updateNavCounts(){
   document.getElementById('nav-count-contacts').textContent=contacts.length;
   const doctorCount=contacts.filter(c=>c.type==='doctor').length;
   document.getElementById('nav-count-doctors').textContent=doctorCount;
+  const dqCount=flaggedContacts().length;
+  const dqEl=document.getElementById('nav-count-dq');
+  if(dqEl){dqEl.textContent=dqCount;dqEl.style.display=dqCount?'':'none';}
   const orgCount=new Set(contacts.map(c=>c.org).filter(o=>o&&!isUnspecifiedOrg(o))).size;
   document.getElementById('nav-count-orgs').textContent=orgCount;
   // Use cached dup count — recalculated only after saves, not on every nav click
@@ -830,7 +852,7 @@ function renderDashboard(){
         <thead><tr><th>Name</th><th>Type</th><th>Stage</th><th>Due</th><th></th></tr></thead>
         <tbody>${followups.map(c=>`<tr class="clickable" onclick="openDetail('${c.id}')">
           <td><strong>${escHtml(c.name)}</strong>${c.org?`<div style="font-size:11px;color:var(--gray)">${escHtml(c.org)}</div>`:''}
-          </td><td><span class="badge type-badge-${c.type}">${c.type==='doctor'?'👨‍⚕️ Recruiting':'🏥 Contract'}</span></td>
+          </td><td><span class="badge type-badge-${c.type}">${c.type==='doctor'?'👨‍⚕️ Recruiting':c.type==='staff'?'👤 Staff':'🏥 Contract'}</span></td>
           <td><span class="badge ${STAGE_COLORS[c.stage]||'badge-gray'}">${c.stage}</span></td>
           <td style="color:var(--red);font-weight:600">${formatDate(c.followup)}</td>
           <td onclick="event.stopPropagation()"><button class="btn btn-secondary btn-sm" onclick="openLogActivity('${c.id}')">Log Activity</button></td>
@@ -986,7 +1008,7 @@ function renderContacts(){
               <strong>${escHtml(c.name)}</strong>
               ${c.email?`<div style="font-size:11px;color:var(--blue)">${escHtml(c.email)}</div>`:''}
             </td>
-            <td><span class="badge type-badge-${c.type}">${c.type==='doctor'?'👨‍⚕️ Recruiting':'🏥 Contract'}</span></td>
+            <td><span class="badge type-badge-${c.type}">${c.type==='doctor'?'👨‍⚕️ Recruiting':c.type==='staff'?'👤 Staff':'🏥 Contract'}</span></td>
             <td>${escHtml(c.org||'—')}</td>
             <td style="font-size:12px;color:#374151">${escHtml(c.jobtitle||'—')}</td>
             <td>${specBadge(c.specialty)}</td>
@@ -1024,8 +1046,9 @@ function quickAdd(){
   if(!name){toast('Enter a name first.');return;}
   const type=document.getElementById('qa-type').value;
   const stage=document.getElementById('qa-stage').value;
-  contacts.push({id:uid(),created:Date.now(),name,type,stage,specialty:'',org:'',phone:'',email:'',location:'',referral:'',followup:'',notes:''});
-  saveAll();
+  const newC={id:uid(),created:Date.now(),name,type,stage,specialty:'',org:'',phone:'',email:'',location:'',referral:'',followup:'',notes:''};
+  contacts.push(newC);
+  _db.ref('contacts/'+(contacts.length-1)).set(newC);invalidateCache();
   document.getElementById('qa-name').value='';
   renderContacts();
   toast(`✓ ${name} added as ${type}.`);
@@ -1033,14 +1056,15 @@ function quickAdd(){
 
 function quickStageChange(id,stage){
   const c=contacts.find(x=>x.id===id);
-  if(c){c.stage=stage;saveAll();toast(`Stage updated to ${stage}`);}
+  if(c){c.stage=stage;saveContactById(id);toast(`Stage updated to ${stage}`);}
 }
 
 // ══════════════════════════════════════════════
 // PIPELINE
 // ══════════════════════════════════════════════
+function setDocDomainFilter(val){_docDomainFilter=val;renderDoctors();}
 function renderDoctors(){
-  const domainFilter=(document.getElementById('doc-domain-filter')?.value||'').toLowerCase().trim();
+  const domainFilter=_docDomainFilter.toLowerCase().trim();
   let doctors=contacts.filter(c=>c.type==='doctor');
   if(domainFilter) doctors=doctors.filter(c=>(c.email||'').toLowerCase().includes(domainFilter)||(c.email2||'').toLowerCase().includes(domainFilter));
   const hired=doctors.filter(c=>c.stage==='Hired');
@@ -1144,10 +1168,10 @@ function renderDoctors(){
     <div class="card" style="margin-bottom:16px;padding:14px 16px">
       <div style="font-size:12px;font-weight:600;color:var(--gray);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Filter by Email Domain</div>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <input id="doc-domain-filter" type="text" placeholder="e.g. @mayo.edu or @emory" value="${domainFilter}"
+        <input id="doc-domain-filter" type="text" placeholder="e.g. @mayo.edu or @emory" value="${escHtml(domainFilter)}"
           style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;width:220px"
-          oninput="renderDoctors()" onkeydown="if(event.key==='Escape'){this.value='';renderDoctors()}">
-        ${domainFilter?`<button class="btn btn-secondary btn-sm" onclick="document.getElementById('doc-domain-filter').value='';renderDoctors()">✕ Clear</button><span style="font-size:12px;color:var(--gray)">${doctors.length} match${doctors.length!==1?'es':''}</span>`:''}
+          oninput="setDocDomainFilter(this.value)" onkeydown="if(event.key==='Escape'){setDocDomainFilter('')}">
+        ${domainFilter?`<button class="btn btn-secondary btn-sm" onclick="setDocDomainFilter('')">✕ Clear</button><span style="font-size:12px;color:var(--gray)">${doctors.length} match${doctors.length!==1?'es':''}</span>`:''}
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
         ${topDomains.map(({d,n})=>`<span onclick="document.getElementById('doc-domain-filter').value='@${d}';renderDoctors()" style="cursor:pointer;background:#f1f5f9;border:1px solid var(--border);border-radius:12px;padding:2px 10px;font-size:11px;color:#374151;white-space:nowrap">@${d} <span style="color:var(--gray)">(${n})</span></span>`).join('')}
@@ -1156,6 +1180,85 @@ function renderDoctors(){
     ${hiredCard}
     ${hired.length&&pipeline.length?'<div style="margin:8px 0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--gray)">Pipeline</div>':''}
     <div style="display:flex;flex-direction:column;gap:12px">${pipelineCards}</div>
+  `;
+  // Restore focus to filter input after re-render
+  if(domainFilter){const inp=document.getElementById('doc-domain-filter');if(inp){inp.focus();inp.setSelectionRange(inp.value.length,inp.value.length);}}
+}
+
+const ADMIN_TITLE_RE=/\b(director|chair|chairman|chief|vp|vice president|president|administrator|manager|head of|dean|coordinator|executive|officer|cmo|ceo|coo|cfo|svp|evp|avp|associate dean|program director|medical director|department head|division head|section chief|superintendent|trustee|board member)\b/i;
+const HOSP_EMAIL_RE=/\.(edu|org)$|hospital|health|medical|clinic|med\.|hosp\./i;
+
+function flaggedContacts(){
+  return contacts.filter(c=>{
+    if(c.type!=='doctor') return false;
+    const title=(c.jobtitle||'').toLowerCase();
+    const email=(c.email||'').toLowerCase();
+    const domain=email.includes('@')?email.split('@')[1]:'';
+    const hasAdminTitle=ADMIN_TITLE_RE.test(title);
+    const hasHospEmail=domain&&HOSP_EMAIL_RE.test(domain)&&!domain.includes('gmail')&&!domain.includes('yahoo')&&!domain.includes('hotmail')&&!domain.includes('outlook')&&!domain.includes('aol');
+    return hasAdminTitle||hasHospEmail;
+  });
+}
+
+function applyDQAction(id, action){
+  const c=contacts.find(x=>x.id===id);
+  if(!c) return;
+  if(action==='staff'){c.type='staff';c.specialty='';}
+  else if(action==='hospital'){c.type='hospital';c.specialty='';}
+  else if(action==='keep'){c._dqReviewed=true;}
+  const i=contacts.indexOf(c);
+  _db.ref('contacts/'+i).set(c);
+  render();
+  toast(`✓ Updated ${c.name}.`);
+}
+
+function renderDataQuality(){
+  const flagged=flaggedContacts().filter(c=>!c._dqReviewed);
+  const reviewed=contacts.filter(c=>c._dqReviewed).length;
+
+  const rows=flagged.map(c=>{
+    const domain=(c.email||'').includes('@')?(c.email||'').split('@')[1]:'';
+    const hasAdminTitle=ADMIN_TITLE_RE.test(c.jobtitle||'');
+    const hasHospEmail=domain&&HOSP_EMAIL_RE.test(domain);
+    const reasons=[];
+    if(hasAdminTitle) reasons.push(`Admin title: "${c.jobtitle}"`);
+    if(hasHospEmail) reasons.push(`Institutional email: @${domain}`);
+    return `<div class="card" style="padding:14px 16px;border-left:4px solid #f59e0b">
+      <div style="display:flex;align-items:flex-start;gap:12px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:14px;font-weight:700;color:#1e293b">${escHtml(c.name)}</div>
+          <div style="font-size:12px;color:var(--gray);margin-top:2px">${escHtml(c.jobtitle||'No title')} ${c.specialty?'· '+escHtml(c.specialty):''}</div>
+          <div style="font-size:11px;color:var(--blue);margin-top:2px">${escHtml(c.email||'')}</div>
+          <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
+            ${reasons.map(r=>`<span style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;border-radius:10px;padding:1px 8px;font-size:11px">⚠️ ${escHtml(r)}</span>`).join('')}
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
+          <button class="btn btn-sm" style="background:#7c3aed;color:#fff;white-space:nowrap" onclick="applyDQAction('${c.id}','staff')">👤 Make Hospital Staff</button>
+          <button class="btn btn-sm" style="background:#15803d;color:#fff;white-space:nowrap" onclick="applyDQAction('${c.id}','hospital')">🏥 Make Hospital (Org)</button>
+          <button class="btn btn-secondary btn-sm" onclick="applyDQAction('${c.id}','keep')">✓ Keep as Doctor</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('content').innerHTML=`
+    <div style="margin-bottom:16px">
+      <div style="font-size:13px;color:var(--gray);margin-bottom:4px">
+        <strong style="color:#f59e0b">${flagged.length}</strong> contacts flagged for review &nbsp;·&nbsp;
+        <span style="color:#16a34a">${reviewed} already reviewed</span>
+      </div>
+      <div style="font-size:12px;color:var(--gray);background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;line-height:1.6">
+        These are contacts currently tagged as <strong>Doctor</strong> but flagged because they have an administrative job title or an institutional email address — they may actually be hospital staff or administrators, not doctors you're recruiting.
+        <br>For each one: <strong>Make Hospital Staff</strong> if they're an individual at a hospital client · <strong>Make Hospital (Org)</strong> if the record should be the hospital itself · <strong>Keep as Doctor</strong> if they really are a doctor you're recruiting.
+      </div>
+    </div>
+    ${flagged.length?`<div style="display:flex;flex-direction:column;gap:8px">${rows}</div>`:`
+    <div class="empty">
+      <div class="empty-icon">✅</div>
+      <div class="empty-title">All contacts reviewed</div>
+      <div class="empty-sub">No flagged contacts remaining.</div>
+    </div>`}
   `;
 }
 
@@ -1465,7 +1568,7 @@ function buildDetailBody(id){
           </div>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <span class="badge type-badge-${c.type}">${c.type==='doctor'?'👨‍⚕️ Recruiting':'🏥 Contract'}</span>
+          <span class="badge type-badge-${c.type}">${c.type==='doctor'?'👨‍⚕️ Recruiting':c.type==='staff'?'👤 Staff':'🏥 Contract'}</span>
           <span class="badge ${STAGE_COLORS[c.stage]||'badge-gray'}">${c.stage}</span>
         </div>
         <div style="display:flex;flex-direction:column;gap:10px;font-size:12px">
@@ -1584,7 +1687,7 @@ function renderStageTab(id){
 function changeStage(id,stage){
   const c=contacts.find(x=>x.id===id);
   if(!c) return;
-  c.stage=stage;saveAll();
+  c.stage=stage;saveContactById(id);
   buildDetailBody(id);
   render();
   toast(`Stage → ${stage}`);
@@ -1701,7 +1804,7 @@ function deleteContact(id){
   const c=contacts.find(x=>x.id===id);
   if(!confirm(`Delete ${c?.name||'this contact'}? All activities and documents will also be removed.`)) return;
   contacts=contacts.filter(x=>x.id!==id);activities=activities.filter(x=>x.contactId!==id);documents=documents.filter(x=>x.contactId!==id);
-  saveAll();render();toast('Contact deleted.');
+  saveContactsOnly();_db.ref('activities').set(activities);render();toast('Contact deleted.');
 }
 
 // ══════════════════════════════════════════════
@@ -1750,8 +1853,9 @@ function attachSingleFile(file,contactId){
   if(file.size>10*1024*1024){toast('File too large (max 10 MB): '+file.name);return;}
   const reader=new FileReader();
   reader.onload=e=>{
-    documents.push({id:uid(),contactId,name:file.name,size:file.size,type:file.type,data:e.target.result,created:Date.now()});
-    saveAll();buildDetailBody(contactId);toast('📎 '+file.name+' attached.');
+    const doc={id:uid(),contactId,name:file.name,size:file.size,type:file.type,data:e.target.result,created:Date.now()};
+    documents.push(doc);
+    _db.ref('documents/'+(documents.length-1)).set(doc);buildDetailBody(contactId);toast('📎 '+file.name+' attached.');
   };
   reader.readAsDataURL(file);
 }
@@ -1761,7 +1865,7 @@ function downloadDoc(id){
 }
 function deleteDoc(id){
   if(!confirm('Remove this document?')) return;
-  documents=documents.filter(x=>x.id!==id);saveAll();toast('Document removed.');
+  documents=documents.filter(x=>x.id!==id);_db.ref('documents').set(documents);toast('Document removed.');
 }
 
 // ══════════════════════════════════════════════
@@ -2354,6 +2458,7 @@ _db.ref('emails').on('value',snap=>{
 });
 
 let _lushaPending=[];
+let _docDomainFilter='';
 _db.ref('lusha_pending').on('value',snap=>{
   const val=snap.val();
   _lushaPending=val?Object.values(val):[];
@@ -2423,7 +2528,7 @@ function saveLushaContact(idx){
   if(!c) return;
   const newC={id:uid(),created:Date.now(),type:'doctor',stage:c.stage||'Prospect',name:c.name||'',jobtitle:c.jobtitle||'',specialty:c.specialty||'',org:c.org||'',phone:c.phone||'',email:c.email||'',email2:c.email2||'',location:c.location||'',referral:'Lusha',followup:'',notes:c.notes||'',tags:c.tags||[]};
   contacts.push(newC);
-  saveAll();
+  _db.ref('contacts/'+(contacts.length-1)).set(newC);invalidateCache();
   _db.ref('lusha_pending').once('value').then(snap=>{
     const val=snap.val();
     if(!val) return;
@@ -2540,8 +2645,8 @@ function applyBulkTag(){
     if(!c) return;
     if(!Array.isArray(c.tags)) c.tags=[];
     if(!c.tags.includes(tag)) c.tags.push(tag);
+    saveContactById(id);
   });
-  saveAll();
   document.getElementById('bulk-tag-input').value='';
   clearBulkSelection();
   toast(`✓ Tag "${tag}" applied to ${ids.length} contact${ids.length>1?'s':''}.`);
@@ -2576,7 +2681,7 @@ function addNote(contactId){
     c.notes='';
   }
   c.notesLog.push({text,ts:Date.now()});
-  saveAll();
+  saveContactById(contactId);
   input.value='';
   // Re-render notes log in place without full rebuild
   refreshNotesLog(c);
@@ -2601,7 +2706,7 @@ function deleteNote(contactId,ts){
   const c=contacts.find(x=>x.id===contactId);
   if(!c) return;
   c.notesLog=(c.notesLog||[]).filter(n=>n.ts!==ts);
-  saveAll();
+  saveContactById(contactId);
   refreshNotesLog(c);
   toast('Note deleted');
 }
