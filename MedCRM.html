@@ -1689,7 +1689,6 @@ function changeStage(id,stage){
   if(!c) return;
   c.stage=stage;saveContactById(id);
   buildDetailBody(id);
-  render();
   toast(`Stage → ${stage}`);
 }
 
@@ -2365,20 +2364,22 @@ function runMigrations(){
     const base=domain.replace(/\.(org|com|edu|net|gov|us)$/,'').replace(/[-_.]/g,' ');
     return base.split(' ').map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(' ');
   }
+  const PERSONAL_DOMAINS=new Set(['gmail.com','yahoo.com','hotmail.com','outlook.com','aol.com','icloud.com','me.com','mac.com','live.com','msn.com','protonmail.com','ymail.com']);
   const existingHospNames=new Set(contacts.filter(c=>c.type==='hospital').map(c=>(c.name||'').toLowerCase()));
   const newHospitals={};
   contacts.forEach(c=>{
-    if(c.type!=='doctor') return;
+    if(c.type==='hospital') return;
     [c.email,c.email2].forEach(email=>{
       if(!email||!email.includes('@')) return;
       const domain=email.split('@')[1].toLowerCase().trim();
+      if(PERSONAL_DOMAINS.has(domain)) return;
       const hospName=domainToHospitalName(domain);
       if(!hospName) return;
       if(!existingHospNames.has(hospName.toLowerCase())&&!newHospitals[hospName.toLowerCase()]){
-        newHospitals[hospName.toLowerCase()]={id:uid(),created:Date.now(),name:hospName,type:'hospital',stage:'Prospect',org:'',jobtitle:'',specialty:'',serviceLine:'',phone:'',email:'',email2:'',location:'',referral:'Auto-detected from doctor email',followup:'',notes:'',tags:[]};
+        newHospitals[hospName.toLowerCase()]={id:uid(),created:Date.now(),name:hospName,type:'hospital',stage:'Prospect',org:'',jobtitle:'',specialty:'',serviceLine:'',phone:'',email:'',email2:'',location:'',referral:'Auto-detected from email domain',followup:'',notes:'',tags:[]};
       }
-      // Link doctor to hospital via org field (if not already set)
-      if(!c.org) c.org=hospName;
+      // Always link contact to hospital via org field
+      c.org=hospName;changed=true;
     });
   });
   const newHospArr=Object.values(newHospitals);
