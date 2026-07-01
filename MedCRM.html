@@ -838,6 +838,19 @@ function isUnspecifiedOrg(org){
   const junk=['unspecified','n/a','none','na','-','unknown','tbd','not provided','not specified'];
   return junk.includes(o)||junk.includes(cleaned)||/^[^a-z0-9]*$/.test(o);
 }
+// Organizations aren't a separate record — just a repeated text field — so renaming one means
+// updating every contact that shares the exact same org string.
+function renameOrganization(oldName){
+  const newName=prompt(`Rename organization "${oldName}" to:`,oldName);
+  if(newName===null) return;
+  const trimmed=newName.trim();
+  if(!trimmed||trimmed===oldName) return;
+  let count=0;
+  contacts.forEach(c=>{
+    if((c.org||'').trim()===oldName){c.org=trimmed;count++;}
+  });
+  if(count>0){saveContactsOnly();render();toast(`✓ Renamed organization for ${count} contact${count!==1?'s':''}.`);}
+}
 
 function findDuplicateGroups(){
   const groups=[];
@@ -1434,7 +1447,10 @@ function renderOrganizations(){
           <div style="display:flex;align-items:center;gap:10px;width:100%">
             <div style="width:36px;height:36px;border-radius:8px;background:#dbeafe;color:#1d4ed8;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0">${escHtml(orgName).charAt(0).toUpperCase()}</div>
             <div style="flex:1;min-width:0">
-              <div style="font-size:14px;font-weight:700;color:#1e293b">${escHtml(orgName)}</div>
+              <div style="font-size:14px;font-weight:700;color:#1e293b;display:flex;align-items:center;gap:6px">
+                ${escHtml(orgName)}
+                <button onclick="event.stopPropagation();renameOrganization('${escHtml(orgName).replace(/'/g,"\\'")}')" style="background:none;border:none;cursor:pointer;color:var(--gray);font-size:12px;padding:0 2px;flex-shrink:0" title="Rename this organization">✏️</button>
+              </div>
               <div style="font-size:11px;color:var(--gray);margin-top:1px">${topTitles.map(t=>escHtml(t)).join(' · ')||'No titles on file'}</div>
             </div>
             <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
