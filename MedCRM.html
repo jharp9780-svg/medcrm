@@ -845,11 +845,14 @@ function renameOrganization(oldName){
   if(newName===null) return;
   const trimmed=newName.trim();
   if(!trimmed||trimmed===oldName) return;
-  let count=0;
-  contacts.forEach(c=>{
-    if((c.org||'').trim()===oldName){c.org=trimmed;count++;}
+  // Write only the changed contacts (one multi-path update) instead of rewriting the whole
+  // contacts array — with thousands of contacts, a full-array write was visibly slow.
+  const updates={};
+  contacts.forEach((c,i)=>{
+    if((c.org||'').trim()===oldName){c.org=trimmed;updates['contacts/'+i]=c;}
   });
-  if(count>0){saveContactsOnly();render();toast(`✓ Renamed organization for ${count} contact${count!==1?'s':''}.`);}
+  const count=Object.keys(updates).length;
+  if(count>0){_db.ref().update(updates);invalidateCache();render();toast(`✓ Renamed organization for ${count} contact${count!==1?'s':''}.`);}
 }
 
 function findDuplicateGroups(){
@@ -1254,6 +1257,10 @@ const HOSP_EMAIL_RE=/\.(edu|org)$|hospital|health|medical|clinic|med\.|hosp\./i;
 
 function flaggedContacts(){
   return contacts.filter(c=>{
+    // Staff/hospital-type contacts should never have a clinical specialty — if one's set, the
+    // title-keyword auto-detection almost certainly mismatched an administrative title (e.g. a
+    // "Tele-ICU" program leader auto-tagged as an Intensivist).
+    if((c.type==='staff'||c.type==='hospital')&&c.specialty) return true;
     if(c.type!=='doctor') return false;
     const title=(c.jobtitle||'').toLowerCase();
     const email=(c.email||'').toLowerCase();
@@ -1269,6 +1276,7 @@ function applyDQAction(id, action){
   if(!c) return;
   if(action==='staff'){c.type='staff';c.specialty='';}
   else if(action==='hospital'){c.type='hospital';c.specialty='';}
+  else if(action==='clear-specialty'){c.specialty='';}
   else if(action==='keep'){c._dqReviewed=true;}
   else if(action==='hired'){c._dqReviewed=true;c.stage='Hired';}
   const i=contacts.indexOf(c);
@@ -1283,16 +1291,19 @@ function dqSelectAll(flagged){flagged.forEach(c=>_dqSelected.add(c.id));renderDa
 function dqClearAll(){_dqSelected.clear();renderDataQuality();}
 function applyDQBulk(action){
   const ids=[..._dqSelected];
+  const updates={};
   ids.forEach(id=>{
     const c=contacts.find(x=>x.id===id);
     if(!c) return;
     if(action==='staff'){c.type='staff';c.specialty='';}
     else if(action==='hospital'){c.type='hospital';c.specialty='';}
+    else if(action==='clear-specialty'){c.specialty='';}
     else if(action==='keep'){c._dqReviewed=true;}
     else if(action==='hired'){c._dqReviewed=true;c.stage='Hired';}
     const i=contacts.indexOf(c);
-    _db.ref('contacts/'+i).set(c);
+    updates['contacts/'+i]=c;
   });
+  _db.ref().update(updates);
   _dqSelected.clear();
   render();
   toast(`✓ Applied to ${ids.length} contacts`);
@@ -1306,13 +1317,22 @@ function renderDataQuality(){
   const selCount=_dqSelected.size;
 
   const rows=flagged.map(c=>{
+    const wrongSpecialty=(c.type==='staff'||c.type==='hospital')&&c.specialty;
     const domain=(c.email||'').includes('@')?(c.email||'').split('@')[1]:'';
     const hasAdminTitle=ADMIN_TITLE_RE.test(c.jobtitle||'');
     const hasHospEmail=domain&&HOSP_EMAIL_RE.test(domain);
     const reasons=[];
+    if(wrongSpecialty) reasons.push(`${c.type==='staff'?'Staff':'Hospital'} contact with clinical specialty: "${c.specialty}"`);
     if(hasAdminTitle) reasons.push(`Admin title: "${c.jobtitle}"`);
     if(hasHospEmail) reasons.push(`Institutional email: @${domain}`);
     const checked=_dqSelected.has(c.id)?'checked':'';
+    const actions=wrongSpecialty?
+      `<button class="btn btn-sm" style="background:#7c3aed;color:#fff;white-space:nowrap" onclick="applyDQAction('${c.id}','clear-specialty')">✕ Clear Specialty</button>
+       <button class="btn btn-secondary btn-sm" onclick="applyDQAction('${c.id}','keep')">✓ Leave As-Is</button>`:
+      `<button class="btn btn-sm" style="background:#7c3aed;color:#fff;white-space:nowrap" onclick="applyDQAction('${c.id}','staff')">👤 Make Hospital Staff</button>
+       <button class="btn btn-sm" style="background:#15803d;color:#fff;white-space:nowrap" onclick="applyDQAction('${c.id}','hospital')">🏥 Make Hospital (Org)</button>
+       <button class="btn btn-secondary btn-sm" onclick="applyDQAction('${c.id}','keep')">✓ Keep as Doctor</button>
+       <button class="btn btn-secondary btn-sm" style="background:#0f766e;color:#fff;white-space:nowrap" onclick="applyDQAction('${c.id}','hired')">✓ Keep + Mark Hired</button>`;
     return `<div class="card" style="padding:14px 16px;border-left:4px solid ${_dqSelected.has(c.id)?'#3b82f6':'#f59e0b'}">
       <div style="display:flex;align-items:flex-start;gap:12px">
         <input type="checkbox" ${checked} onchange="dqToggle('${c.id}')" style="margin-top:3px;width:16px;height:16px;cursor:pointer;flex-shrink:0">
@@ -1325,10 +1345,7 @@ function renderDataQuality(){
           </div>
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
-          <button class="btn btn-sm" style="background:#7c3aed;color:#fff;white-space:nowrap" onclick="applyDQAction('${c.id}','staff')">👤 Make Hospital Staff</button>
-          <button class="btn btn-sm" style="background:#15803d;color:#fff;white-space:nowrap" onclick="applyDQAction('${c.id}','hospital')">🏥 Make Hospital (Org)</button>
-          <button class="btn btn-secondary btn-sm" onclick="applyDQAction('${c.id}','keep')">✓ Keep as Doctor</button>
-          <button class="btn btn-secondary btn-sm" style="background:#0f766e;color:#fff;white-space:nowrap" onclick="applyDQAction('${c.id}','hired')">✓ Keep + Mark Hired</button>
+          ${actions}
         </div>
       </div>
     </div>`;
