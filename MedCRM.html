@@ -2382,6 +2382,12 @@ function normalizeActType(val,subject){
   if(s.includes('meeting')) return 'meeting';
   return 'note';
 }
+// Salesforce report exports flatten email bodies into one line with no real line breaks —
+// reconstruct readable structure by breaking before the repeating To:/CC:/Subject:/Body: envelope labels.
+function prettifyDescription(text){
+  if(!text) return text;
+  return text.replace(/\s*(To:|CC:|BCC:|Attachment:|Subject:|Body:|From:|Sent:)\s*/g,'\n$1 ').replace(/^\n+/,'').trim();
+}
 // Prefer an exact name+org match, then name-only, then treat the row as an org-level
 // activity if Account Name matches a hospital-type contact (SF tasks logged on the Account, no Contact).
 function findContactForActivity(nameVal,orgVal){
@@ -2424,7 +2430,7 @@ function doImportActivities(){
       contact={id:uid(),created:Date.now(),type:'staff',stage:'Active Contact',name:rec.contactname||rec.orgname,jobtitle:'',specialty:'',org:rec.contactname?rec.orgname:'',phone:'',email:'',location:'',referral:'',followup:'',notes:'',tags:['Imported from Salesforce']};
       contacts.push(contact);createdContacts++;
     }
-    const desc=[rec.subject,rec.description].filter(Boolean).join(' — ')||'(No description)';
+    const desc=[rec.subject,prettifyDescription(rec.description)].filter(Boolean).join('\n\n')||'(No description)';
     activities.push({id:uid(),contactId:contact.id,type:normalizeActType(rec.type,rec.subject),date:normalizeActDate(rec.date),desc,created:Date.now()});
     imported++;
   });
