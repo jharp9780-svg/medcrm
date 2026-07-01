@@ -2410,6 +2410,28 @@ function findContactForActivity(nameVal,orgVal){
   return null;
 }
 
+// One-time cleanup for a bulk import that ran before activities were tagged with source:'sf-import'.
+// Detects it generically by finding the largest tight burst of created-timestamps (a manual entry added
+// weeks apart won't fall inside a burst where thousands of rows were written within the same second or two).
+function cleanupUntaggedBulkImport(){
+  const untagged=activities.filter(a=>!a.source);
+  if(untagged.length<20) return 0;
+  const times=untagged.map(a=>a.created).sort((a,b)=>a-b);
+  let bestStart=0,bestEnd=0,curStart=0;
+  for(let i=1;i<times.length;i++){
+    if(times[i]-times[i-1]>60000){
+      if(i-1-curStart>bestEnd-bestStart){bestStart=curStart;bestEnd=i-1;}
+      curStart=i;
+    }
+  }
+  if(times.length-1-curStart>bestEnd-bestStart){bestStart=curStart;bestEnd=times.length-1;}
+  if(bestEnd-bestStart<20) return 0;
+  const rangeStart=times[bestStart],rangeEnd=times[bestEnd];
+  const toRemove=new Set(untagged.filter(a=>a.created>=rangeStart&&a.created<=rangeEnd).map(a=>a.id));
+  activities=activities.filter(a=>!toRemove.has(a.id));
+  return toRemove.size;
+}
+
 function doImportActivities(){
   const mapping={};
   _actCsvHeaders.forEach((_,i)=>{
@@ -2420,8 +2442,10 @@ function doImportActivities(){
     toast('Please map at least a Contact Name or Account/Organization column.');return;
   }
   const createMissing=document.getElementById('act-create-missing').checked;
+  let legacyRemoved=0;
   if(document.getElementById('act-clear-previous').checked){
     activities=activities.filter(a=>a.source!=='sf-import');
+    legacyRemoved=cleanupUntaggedBulkImport();
   }
   let imported=0,skipped=0,createdContacts=0;
   _actCsvData.forEach(row=>{
@@ -2442,7 +2466,7 @@ function doImportActivities(){
     imported++;
   });
   saveAll();closeModal('import-activities-modal');render();
-  toast(`✓ Imported ${imported} activities${createdContacts?`, created ${createdContacts} new contacts`:''}${skipped?`, skipped ${skipped}`:''}.`);
+  toast(`✓ Imported ${imported} activities${createdContacts?`, created ${createdContacts} new contacts`:''}${skipped?`, skipped ${skipped}`:''}${legacyRemoved?`, removed ${legacyRemoved} from the earlier import`:''}.`);
 }
 
 // ══════════════════════════════════════════════
