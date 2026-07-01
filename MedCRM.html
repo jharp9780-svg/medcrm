@@ -2633,29 +2633,66 @@ function cleanActivityDesc(desc){
     .trim();
 }
 function renderActivityDesc(desc){
+  if(!desc) return '';
   const cleaned=cleanActivityDesc(desc);
   const lines=cleaned.split('\n');
+
+  // Detect email envelope (To:/From:/Subject:/Body: pattern)
+  const isEmail=/^(To:|From:|Subject:|Body:|CC:|BCC:|Sent:)/m.test(cleaned);
+
+  // Detect schedule table (multiple date lines)
   const dateLineRe=/^(\d{1,2}\/\d{1,2}\/\d{4})\b(.*)$/;
-  const usFormatRe=/\(\d{1,2}\/\d{1,2}-\d{1,2}\/\d{1,2}\)\s*[A-Za-z-]+\s*[\d.]+\s*$/;
-  const preambleLines=[],allRows=[],usRows=[],localRows=[];
-  lines.forEach(l=>{
-    const t=l.trim();
-    const m=t.match(dateLineRe);
-    if(m){
-      const entry={date:m[1],rest:m[2].trim()};
-      allRows.push(entry);
-      if(usFormatRe.test(t)) usRows.push(entry); else localRows.push(entry);
-    } else if(t) preambleLines.push(t);
-  });
-  if(allRows.length<2) return `<div class="activity-desc">${escHtml(cleaned)}</div>`;
-  const preamble=preambleLines.length?`<div class="activity-desc" style="margin-bottom:8px">${escHtml(preambleLines.join('\n'))}</div>`:'';
-  if(usRows.length&&localRows.length&&usRows.length===localRows.length){
-    const headerRow='<tr><th style="text-align:left;padding:4px 12px 4px 0;font-size:11px;color:var(--gray);border-bottom:1px solid var(--border)">US Date / Time</th><th style="text-align:left;padding:4px 0;font-size:11px;color:var(--gray);border-bottom:1px solid var(--border)">Local Date / Time</th></tr>';
-    const tableRows=usRows.map((u,i)=>`<tr><td style="padding:3px 12px 3px 0;white-space:nowrap;font-weight:600;color:#1e293b;vertical-align:top;font-size:12.5px">${escHtml(u.date)} ${escHtml(u.rest)}</td><td style="padding:3px 0;white-space:nowrap;color:#374151;font-size:12.5px">${escHtml(localRows[i].date)} ${escHtml(localRows[i].rest)}</td></tr>`).join('');
-    return `${preamble}<table style="border-collapse:collapse">${headerRow}${tableRows}</table>`;
+  const dateLines=lines.filter(l=>dateLineRe.test(l.trim()));
+  const isSchedule=dateLines.length>=2;
+
+  if(isEmail){
+    // Render email as a clean card with labeled fields
+    const fieldRe=/^(To|From|CC|BCC|Subject|Body|Sent|Attachment):\s*/;
+    const parts=[];
+    let cur=null;
+    lines.forEach(l=>{
+      const t=l.trim();
+      const m=t.match(/^(To|From|CC|BCC|Subject|Body|Sent|Attachment):\s*(.*)/);
+      if(m){if(cur) parts.push(cur);cur={label:m[1],text:m[2]};}
+      else if(cur) cur.text+=(cur.text?'\n':'')+t;
+    });
+    if(cur) parts.push(cur);
+    return `<div style="font-size:12px;line-height:1.6">
+      ${parts.map(p=>{
+        if(!p.text.trim()) return '';
+        if(p.label==='Body') return `<div style="margin-top:10px;padding-top:10px;border-top:1px solid #e2e8f0;color:#374151;white-space:pre-wrap;font-size:12.5px">${escHtml(p.text.trim())}</div>`;
+        return `<div style="display:flex;gap:6px;margin-bottom:2px"><span style="font-weight:600;color:#64748b;min-width:60px;flex-shrink:0">${escHtml(p.label)}:</span><span style="color:#1e293b">${escHtml(p.text.trim())}</span></div>`;
+      }).join('')}
+    </div>`;
   }
-  const tableRows=allRows.map(r=>`<tr><td style="padding:3px 12px 3px 0;white-space:nowrap;font-weight:600;color:#1e293b;vertical-align:top;font-size:12.5px">${escHtml(r.date)}</td><td style="padding:3px 0;color:#374151;font-size:12.5px">${escHtml(r.rest)}</td></tr>`).join('');
-  return `${preamble}<table style="border-collapse:collapse">${tableRows}</table>`;
+
+  if(isSchedule){
+    // Render schedule as a clean table
+    const usFormatRe=/\(\d{1,2}\/\d{1,2}-\d{1,2}\/\d{1,2}\)/;
+    const preamble=lines.filter(l=>!dateLineRe.test(l.trim())&&l.trim()).join('\n');
+    const usRows=[],localRows=[];
+    lines.forEach(l=>{const m=l.trim().match(dateLineRe);if(!m) return;(usFormatRe.test(l)?usRows:localRows).push({date:m[1],rest:m[2].trim()});});
+    const pre=preamble?`<div style="font-size:12.5px;color:#374151;margin-bottom:10px;white-space:pre-wrap">${escHtml(preamble)}</div>`:'';
+    if(usRows.length&&localRows.length&&usRows.length===localRows.length){
+      return `${pre}<table style="border-collapse:collapse;font-size:12px;width:100%">
+        <tr><th style="text-align:left;padding:4px 16px 4px 0;color:#64748b;border-bottom:1px solid #e2e8f0;font-weight:600">US Date/Time</th><th style="text-align:left;padding:4px 0;color:#64748b;border-bottom:1px solid #e2e8f0;font-weight:600">Local Date/Time</th></tr>
+        ${usRows.map((u,i)=>`<tr><td style="padding:4px 16px 4px 0;color:#1e293b;font-weight:600;vertical-align:top">${escHtml(u.date)} ${escHtml(u.rest)}</td><td style="padding:4px 0;color:#374151">${escHtml(localRows[i].date)} ${escHtml(localRows[i].rest)}</td></tr>`).join('')}
+      </table>`;
+    }
+    return `${pre}<table style="border-collapse:collapse;font-size:12px">
+      ${dateLines.map(l=>{const m=l.trim().match(dateLineRe);return m?`<tr><td style="padding:3px 16px 3px 0;font-weight:600;color:#1e293b;vertical-align:top;white-space:nowrap">${escHtml(m[1])}</td><td style="padding:3px 0;color:#374151">${escHtml(m[2].trim())}</td></tr>`:''}).join('')}
+    </table>`;
+  }
+
+  // Default: render as clean formatted text with bullet detection
+  const html=lines.map(l=>{
+    const t=l.trim();
+    if(!t) return '<div style="height:8px"></div>';
+    if(/^[•·\-\*]\s/.test(t)) return `<div style="display:flex;gap:6px;margin:2px 0"><span style="color:#94a3b8;flex-shrink:0">•</span><span style="color:#374151;font-size:12.5px">${escHtml(t.replace(/^[•·\-\*]\s/,''))}</span></div>`;
+    if(/^\d+\.\s/.test(t)) return `<div style="color:#374151;font-size:12.5px;margin:2px 0">${escHtml(t)}</div>`;
+    return `<div style="color:#374151;font-size:12.5px;line-height:1.65;margin:1px 0">${escHtml(t)}</div>`;
+  }).join('');
+  return `<div style="font-size:12.5px;line-height:1.65">${html}</div>`;
 }
 function initials(name){return(name||'').split(' ').filter(Boolean).map(w=>w[0]).join('').toUpperCase().slice(0,2)}
 function formatDate(d){if(!d) return '—';const[y,m,day]=d.split('-');const mo=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return`${mo[+m-1]} ${+day}, ${y}`}
