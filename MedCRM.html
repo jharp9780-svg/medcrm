@@ -832,7 +832,10 @@ function updateNavCounts(){
 function normalize(s){return(s||'').toLowerCase().replace(/\s+/g,' ').trim();}
 function isUnspecifiedOrg(org){
   const o=(org||'').toLowerCase().trim();
-  return !o||o==='unspecified'||o==='n/a'||o==='none'||o==='na'||o==='-'||o==='unknown'||o==='tbd';
+  if(!o) return true;
+  const cleaned=o.replace(/[\[\]]/g,'').trim();
+  const junk=['unspecified','n/a','none','na','-','unknown','tbd','not provided','not specified'];
+  return junk.includes(o)||junk.includes(cleaned)||/^[^a-z0-9]*$/.test(o);
 }
 
 function findDuplicateGroups(){
