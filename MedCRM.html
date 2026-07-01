@@ -2367,11 +2367,16 @@ function normalizeActDate(val){
   if(!isNaN(d)) return d.toISOString().slice(0,10);
   return new Date().toISOString().slice(0,10);
 }
-function normalizeActType(val){
+function normalizeActType(val,subject){
   const v=(val||'').toLowerCase();
   if(v.includes('email')) return 'email';
   if(v.includes('call')) return 'call';
   if(v.includes('meeting')||v.includes('event')) return 'meeting';
+  // Type field is often blank in Salesforce exports — fall back to keywords in the Subject line.
+  const s=(subject||'').toLowerCase();
+  if(s.includes('email')) return 'email';
+  if(s.includes('call')||s.includes('whatsapp')) return 'call';
+  if(s.includes('meeting')) return 'meeting';
   return 'note';
 }
 // Prefer an exact name+org match, then name-only, then treat the row as an org-level
@@ -2417,7 +2422,7 @@ function doImportActivities(){
       contacts.push(contact);createdContacts++;
     }
     const desc=[rec.subject,rec.description].filter(Boolean).join(' — ')||'(No description)';
-    activities.push({id:uid(),contactId:contact.id,type:normalizeActType(rec.type),date:normalizeActDate(rec.date),desc,created:Date.now()});
+    activities.push({id:uid(),contactId:contact.id,type:normalizeActType(rec.type,rec.subject),date:normalizeActDate(rec.date),desc,created:Date.now()});
     imported++;
   });
   saveAll();closeModal('import-activities-modal');render();
