@@ -563,6 +563,10 @@ Referred by Dr. Marcus Lee" oninput="runSmartParse()"></textarea>
           <input type="checkbox" id="act-create-missing" checked style="width:16px;height:16px">
           <label for="act-create-missing" style="font-size:13px;font-weight:500;color:#374151;cursor:pointer">Create a new contact for names that don't match anyone already in MedCRM</label>
         </div>
+        <div class="import-step" style="display:flex;align-items:center;gap:10px">
+          <input type="checkbox" id="act-clear-previous" checked style="width:16px;height:16px">
+          <label for="act-clear-previous" style="font-size:13px;font-weight:500;color:#374151;cursor:pointer">Remove activities from a previous Salesforce import first (prevents duplicates when re-importing) — does not touch manually-added notes</label>
+        </div>
       </div>
     </div>
     <div class="modal-footer">
@@ -2416,6 +2420,9 @@ function doImportActivities(){
     toast('Please map at least a Contact Name or Account/Organization column.');return;
   }
   const createMissing=document.getElementById('act-create-missing').checked;
+  if(document.getElementById('act-clear-previous').checked){
+    activities=activities.filter(a=>a.source!=='sf-import');
+  }
   let imported=0,skipped=0,createdContacts=0;
   _actCsvData.forEach(row=>{
     const rec={contactname:'',orgname:'',type:'',subject:'',description:'',date:''};
@@ -2431,7 +2438,7 @@ function doImportActivities(){
       contacts.push(contact);createdContacts++;
     }
     const desc=[rec.subject,prettifyDescription(rec.description)].filter(Boolean).join('\n\n')||'(No description)';
-    activities.push({id:uid(),contactId:contact.id,type:normalizeActType(rec.type,rec.subject),date:normalizeActDate(rec.date),desc,created:Date.now()});
+    activities.push({id:uid(),contactId:contact.id,type:normalizeActType(rec.type,rec.subject),date:normalizeActDate(rec.date),desc,created:Date.now(),source:'sf-import'});
     imported++;
   });
   saveAll();closeModal('import-activities-modal');render();
