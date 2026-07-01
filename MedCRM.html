@@ -1836,14 +1836,20 @@ function toggleActInPlace(aid){
     row.style.background='#fff';
     row.style.borderLeft='none';
     row.style.paddingLeft='';
+    body.style.whiteSpace='nowrap';
+    body.style.overflow='hidden';
+    body.style.textOverflow='ellipsis';
     const firstLine=(a.desc||'').split('\n').find(l=>l.trim())||'';
-    body.innerHTML=`<div style="font-size:12.5px;color:#374151;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(firstLine)||'<span style="color:#94a3b8;font-style:italic">no content</span>'}</div>`;
+    body.innerHTML=escHtml(firstLine)||'<span style="color:#94a3b8;font-style:italic">no content</span>';
     if(chevron) chevron.textContent='▼ view';
   } else {
     row.dataset.open='1';
     row.style.background='#f0f7ff';
     row.style.borderLeft='3px solid #3b82f6';
     row.style.paddingLeft='11px';
+    body.style.whiteSpace='normal';
+    body.style.overflow='visible';
+    body.style.textOverflow='clip';
     const fullDesc=(a.desc||'').trim();
     body.innerHTML=fullDesc
       ? renderActivityDesc(fullDesc)
