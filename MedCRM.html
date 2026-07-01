@@ -864,7 +864,7 @@ function findDuplicateGroups(){
 function handleGlobalSearch(val){
   searchQuery=val.toLowerCase();
   contactsPage=0;orgsPage=0;
-  if(currentView==='contacts') renderContacts();
+  if(currentView==='contacts'||currentView==='orgs') render();
   else{currentView='contacts';document.querySelector('#nav-contacts').classList.add('active');document.querySelectorAll('.nav-item').forEach(el=>el!==document.querySelector('#nav-contacts')&&el.classList.remove('active'));document.getElementById('page-title').textContent='Contacts';renderContacts();}
 }
 
