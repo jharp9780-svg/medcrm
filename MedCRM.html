@@ -772,17 +772,20 @@ _auth.onAuthStateChanged(async user=>{
     if(contacts.length){ saveAll(); toast(`✅ Migrated ${contacts.length} contacts to cloud`); }
   }
 
-  runMigrations();
-  render(); // render immediately with contacts — no waiting for activities/docs
+  // Migrations run once per session only — they're expensive on 9000+ contacts
+  if(!sessionStorage.getItem('_migDone')){
+    runMigrations();
+    sessionStorage.setItem('_migDone','1');
+  }
 
-  // Load activities and documents in background, then quietly refresh
+  // Load activities and documents in background, then render once with everything
   const [aSnap,dSnap]=await Promise.all([
     _db.ref('activities').once('value'),
     _db.ref('documents').once('value')
   ]);
   activities=toArr(aSnap.val());
   documents=toArr(dSnap.val());
-  render(); // refresh with full data
+  render();
 });
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
 
@@ -2915,8 +2918,8 @@ function runMigrations(){
       if(!existingHospNames.has(hospName.toLowerCase())&&!newHospitals[hospName.toLowerCase()]){
         newHospitals[hospName.toLowerCase()]={id:uid(),created:Date.now(),name:hospName,type:'hospital',stage:'Prospect',org:'',jobtitle:'',specialty:'',serviceLine:'',phone:'',email:'',email2:'',location:'',referral:'Auto-detected from email domain',followup:'',notes:'',tags:[]};
       }
-      // Always link contact to hospital via org field
-      c.org=hospName;changed=true;c._migrationDirty=true;
+      // Link contact to hospital via org field (skip if already set)
+      if(c.org!==hospName){c.org=hospName;changed=true;c._migrationDirty=true;}
     });
   });
   const newHospArr=Object.values(newHospitals);
