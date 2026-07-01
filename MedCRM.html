@@ -1831,12 +1831,22 @@ function toggleActInPlace(aid){
   const isOpen=row.dataset.open==='1';
   if(isOpen){
     row.dataset.open='0';
-    body.innerHTML=`<div style="font-size:12.5px;color:#374151;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:420px">${escHtml((a.desc||'').split('\n').find(l=>l.trim())||'(no content)')}</div>`;
-    if(chevron) chevron.textContent='▼';
+    row.style.background='#fff';
+    row.style.borderLeft='none';
+    row.style.paddingLeft='';
+    const firstLine=(a.desc||'').split('\n').find(l=>l.trim())||'';
+    body.innerHTML=`<div style="font-size:12.5px;color:#374151;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(firstLine)||'<span style="color:#94a3b8;font-style:italic">no content</span>'}</div>`;
+    if(chevron) chevron.textContent='▼ view';
   } else {
     row.dataset.open='1';
-    body.innerHTML=renderActivityDesc(a.desc);
-    if(chevron) chevron.textContent='▲';
+    row.style.background='#f0f7ff';
+    row.style.borderLeft='3px solid #3b82f6';
+    row.style.paddingLeft='11px';
+    const fullDesc=(a.desc||'').trim();
+    body.innerHTML=fullDesc
+      ? renderActivityDesc(fullDesc)
+      : `<div style="color:#94a3b8;font-style:italic;font-size:12px">No additional content was recorded for this activity.</div>`;
+    if(chevron) chevron.textContent='▲ close';
   }
 }
 
