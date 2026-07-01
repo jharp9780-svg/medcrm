@@ -2533,24 +2533,29 @@ function specBadge(specialty){
   return `<span class="spec-badge ${cls}">${emoji} ${escHtml(specialty)}</span>`;
 }
 function escHtml(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
-// Renders a schedule/shift-assignment email body (many lines each starting with a date) as an
-// actual two-column table instead of a wall of text — Salesforce's export strips the original HTML
-// table structure, so this is a best-effort Date | Details split rather than a true multi-column grid.
+// Renders a schedule/shift-assignment email body as an actual table instead of a wall of text.
+// These emails list each shift twice — once in US hospital-local time, once in the doctor's home
+// timezone — so every entry produces two consecutive date lines; pair them into US | Local | Details columns.
 function renderActivityDesc(desc){
   const lines=(desc||'').split('\n');
   const dateLineRe=/^(\d{1,2}\/\d{1,2}\/\d{4})\b(.*)$/;
   const dateLineCount=lines.filter(l=>dateLineRe.test(l.trim())).length;
   if(dateLineCount<4) return `<div class="activity-desc">${escHtml(desc)}</div>`;
-  const preambleLines=[],rows=[];
+  const preambleLines=[],dateLines=[];
   lines.forEach(l=>{
     const t=l.trim();
     const m=t.match(dateLineRe);
-    if(m) rows.push({date:m[1],rest:m[2].trim()});
+    if(m) dateLines.push({date:m[1],rest:m[2].trim()});
     else if(t) preambleLines.push(t);
   });
+  const rows=[];
+  for(let i=0;i<dateLines.length;i+=2){
+    rows.push({us:dateLines[i],local:dateLines[i+1]||null});
+  }
   const preamble=preambleLines.length?`<div class="activity-desc" style="margin-bottom:8px">${escHtml(preambleLines.join('\n'))}</div>`:'';
-  const tableRows=rows.map(r=>`<tr><td style="padding:3px 12px 3px 0;white-space:nowrap;font-weight:600;color:#1e293b;vertical-align:top;font-size:12.5px">${escHtml(r.date)}</td><td style="padding:3px 0;color:#374151;font-size:12.5px">${escHtml(r.rest)}</td></tr>`).join('');
-  return `${preamble}<table style="border-collapse:collapse">${tableRows}</table>`;
+  const headerRow='<tr><th style="text-align:left;padding:4px 12px 4px 0;font-size:11px;color:var(--gray);border-bottom:1px solid var(--border)">US Date / Time</th><th style="text-align:left;padding:4px 12px 4px 0;font-size:11px;color:var(--gray);border-bottom:1px solid var(--border)">Local Date</th><th style="text-align:left;padding:4px 0;font-size:11px;color:var(--gray);border-bottom:1px solid var(--border)">Local Time / Details</th></tr>';
+  const tableRows=rows.map(r=>`<tr><td style="padding:3px 12px 3px 0;white-space:nowrap;font-weight:600;color:#1e293b;vertical-align:top;font-size:12.5px">${escHtml(r.us.date)} ${escHtml(r.us.rest)}</td><td style="padding:3px 12px 3px 0;white-space:nowrap;font-weight:600;color:#1e293b;vertical-align:top;font-size:12.5px">${r.local?escHtml(r.local.date):''}</td><td style="padding:3px 0;color:#374151;font-size:12.5px">${r.local?escHtml(r.local.rest):''}</td></tr>`).join('');
+  return `${preamble}<table style="border-collapse:collapse">${headerRow}${tableRows}</table>`;
 }
 function initials(name){return(name||'').split(' ').filter(Boolean).map(w=>w[0]).join('').toUpperCase().slice(0,2)}
 function formatDate(d){if(!d) return '—';const[y,m,day]=d.split('-');const mo=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return`${mo[+m-1]} ${+day}, ${y}`}
