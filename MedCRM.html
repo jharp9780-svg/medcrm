@@ -2581,23 +2581,33 @@ function specBadge(specialty){
 }
 function escHtml(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 // Renders a schedule/shift-assignment email body as an actual table instead of a wall of text.
-// There's no reliable delimiter left in the flattened Salesforce export to prove which US-timezone
-// line corresponds to which local-timezone line, so this shows one row per date-line as-is rather
-// than guessing at a pairing that could show a false relationship between unrelated entries.
+// These emails list every shift twice — as one contiguous block of US-timezone lines (ending in a
+// "(date range) Timezone Hours" suffix) and a separate contiguous block of local-timezone lines
+// (no such suffix) — rather than interleaved US/local pairs. Bucket by that format signature and
+// zip same-index entries together; only do this when both buckets are non-empty and equal in size,
+// so a mismatch never produces a fabricated pairing.
 function renderActivityDesc(desc){
   const lines=(desc||'').split('\n');
   const dateLineRe=/^(\d{1,2}\/\d{1,2}\/\d{4})\b(.*)$/;
-  const dateLineCount=lines.filter(l=>dateLineRe.test(l.trim())).length;
-  if(dateLineCount<2) return `<div class="activity-desc">${escHtml(desc)}</div>`;
-  const preambleLines=[],rows=[];
+  const usFormatRe=/\(\d{1,2}\/\d{1,2}-\d{1,2}\/\d{1,2}\)\s*[A-Za-z-]+\s*[\d.]+\s*$/;
+  const preambleLines=[],allRows=[],usRows=[],localRows=[];
   lines.forEach(l=>{
     const t=l.trim();
     const m=t.match(dateLineRe);
-    if(m) rows.push({date:m[1],rest:m[2].trim()});
-    else if(t) preambleLines.push(t);
+    if(m){
+      const entry={date:m[1],rest:m[2].trim()};
+      allRows.push(entry);
+      if(usFormatRe.test(t)) usRows.push(entry); else localRows.push(entry);
+    } else if(t) preambleLines.push(t);
   });
+  if(allRows.length<2) return `<div class="activity-desc">${escHtml(desc)}</div>`;
   const preamble=preambleLines.length?`<div class="activity-desc" style="margin-bottom:8px">${escHtml(preambleLines.join('\n'))}</div>`:'';
-  const tableRows=rows.map(r=>`<tr><td style="padding:3px 12px 3px 0;white-space:nowrap;font-weight:600;color:#1e293b;vertical-align:top;font-size:12.5px">${escHtml(r.date)}</td><td style="padding:3px 0;color:#374151;font-size:12.5px">${escHtml(r.rest)}</td></tr>`).join('');
+  if(usRows.length&&localRows.length&&usRows.length===localRows.length){
+    const headerRow='<tr><th style="text-align:left;padding:4px 12px 4px 0;font-size:11px;color:var(--gray);border-bottom:1px solid var(--border)">US Date / Time</th><th style="text-align:left;padding:4px 0;font-size:11px;color:var(--gray);border-bottom:1px solid var(--border)">Local Date / Time</th></tr>';
+    const tableRows=usRows.map((u,i)=>`<tr><td style="padding:3px 12px 3px 0;white-space:nowrap;font-weight:600;color:#1e293b;vertical-align:top;font-size:12.5px">${escHtml(u.date)} ${escHtml(u.rest)}</td><td style="padding:3px 0;white-space:nowrap;color:#374151;font-size:12.5px">${escHtml(localRows[i].date)} ${escHtml(localRows[i].rest)}</td></tr>`).join('');
+    return `${preamble}<table style="border-collapse:collapse">${headerRow}${tableRows}</table>`;
+  }
+  const tableRows=allRows.map(r=>`<tr><td style="padding:3px 12px 3px 0;white-space:nowrap;font-weight:600;color:#1e293b;vertical-align:top;font-size:12.5px">${escHtml(r.date)}</td><td style="padding:3px 0;color:#374151;font-size:12.5px">${escHtml(r.rest)}</td></tr>`).join('');
   return `${preamble}<table style="border-collapse:collapse">${tableRows}</table>`;
 }
 function initials(name){return(name||'').split(' ').filter(Boolean).map(w=>w[0]).join('').toUpperCase().slice(0,2)}
