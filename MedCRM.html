@@ -1817,21 +1817,17 @@ function switchTab(tab){
 
 function renderActsTab(acts,id){
   return `<div style="margin-bottom:12px"><button class="btn btn-primary btn-sm" onclick="openLogActivity('${id}')">+ Log Activity</button></div>
-    <div>${acts.length?acts.map(a=>{
-      const rendered=renderActivityDesc(a.desc);
-      const eid='aexp-'+a.id;
-      return `<div class="activity-item">
+    <div>${acts.length?acts.map(a=>`<div class="activity-item">
       <div class="activity-icon ${ACT_CLASSES[a.type]||'act-note'}">${ACT_ICONS[a.type]||'📝'}</div>
-      <div class="activity-body" style="cursor:pointer" onclick="const el=document.getElementById('${eid}');el.style.display=el.style.display==='none'?'block':'none'">
-        <div style="font-size:13px;font-weight:600;color:#1e293b;margin-bottom:2px">${escHtml((a.desc||'').split('\n')[0].slice(0,120))}</div>
+      <div class="activity-body">
+        ${renderActivityDesc(a.desc)}
         <div class="activity-meta">${formatDate(a.date)} · ${a.type}</div>
-        <div id="${eid}" style="display:none;margin-top:8px">${rendered}</div>
       </div>
       <div style="display:flex;gap:6px;flex-shrink:0">
-        <button class="btn btn-secondary btn-xs" onclick="event.stopPropagation();openEditActivity('${a.id}')">Edit</button>
-        <button class="btn btn-danger btn-xs" onclick="event.stopPropagation();deleteActivity('${a.id}');buildDetailBody('${id}')">Del</button>
+        <button class="btn btn-secondary btn-xs" onclick="openEditActivity('${a.id}')">Edit</button>
+        <button class="btn btn-danger btn-xs" onclick="deleteActivity('${a.id}');buildDetailBody('${id}')">Del</button>
       </div>
-    </div>`;}).join(''):`<div class="empty" style="padding:20px 0"><div class="empty-icon">🕐</div><div class="empty-sub">No activity yet. Log a call, email, or meeting above.</div></div>`}</div>`;
+    </div>`).join(''):`<div class="empty" style="padding:20px 0"><div class="empty-icon">🕐</div><div class="empty-sub">No activity yet. Log a call, email, or meeting above.</div></div>`}</div>`;
 }
 
 function renderDocsTab(docs,id){
