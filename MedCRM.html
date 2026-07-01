@@ -2402,8 +2402,9 @@ function normalizeUnicodeChars(text){
     .replace(/[‘’]/g,"'")
     .replace(/[“”]/g,'"')
     .replace(/[–—]/g,'-')
-    .replace(/ /g,' ')
-    .replace(/[​‌‍﻿]/g,'');
+    .replace(/[  ]/g,'\n')
+    .replace(/[-   -   　﻿]/g,' ')
+    .replace(/[​‌‍]/g,'');
 }
 // Auto-generated shift/hours-confirmation emails embed an HTML table that Salesforce flattens into
 // one line with zero separators between cells. Detected by a dense run of MM/DD/YYYY dates — when found,
