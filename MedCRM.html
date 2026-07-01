@@ -1840,18 +1840,17 @@ function toggleActInPlace(aid){
 function renderActsTab(acts,id){
   return `<div style="margin-bottom:12px"><button class="btn btn-primary btn-sm" onclick="openLogActivity('${id}')">+ Log Activity</button></div>
     <div>${acts.length?acts.map(a=>{
-      const firstLine=(a.desc||'').split('\n').find(l=>l.trim())||'(no content)';
-      const hasMore=(a.desc||'').trim().split('\n').filter(l=>l.trim()).length>1;
-      return `<div id="act-row-${a.id}" data-open="0" class="activity-item" style="cursor:pointer;user-select:none" onclick="toggleActInPlace('${a.id}')">
+      const firstLine=(a.desc||'').split('\n').find(l=>l.trim())||'';
+      return `<div id="act-row-${a.id}" data-open="0" class="activity-item" style="cursor:pointer;background:#fff;transition:background .1s" onmouseenter="this.style.background='#f8fafc'" onmouseleave="this.style.background='#fff'" onclick="toggleActInPlace('${a.id}')">
         <div class="activity-icon ${ACT_CLASSES[a.type]||'act-note'}">${ACT_ICONS[a.type]||'📝'}</div>
         <div class="activity-body" style="min-width:0;overflow:hidden">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
             <span style="font-size:11px;color:#64748b;white-space:nowrap">${formatDate(a.date)} · ${a.type}</span>
-            ${hasMore?`<span class="act-chevron" style="font-size:9px;color:#94a3b8;margin-left:auto">▼</span>`:''}
+            <span class="act-chevron" style="font-size:9px;color:#94a3b8;margin-left:auto;flex-shrink:0">▼ view</span>
           </div>
-          <div class="act-body-content"><div style="font-size:12.5px;color:#374151;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:420px">${escHtml(firstLine)}</div></div>
+          <div class="act-body-content" style="font-size:12.5px;color:#374151;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(firstLine)||'<span style="color:#94a3b8;font-style:italic">click to view</span>'}</div>
         </div>
-        <div style="display:flex;gap:6px;flex-shrink:0" onclick="event.stopPropagation()">
+        <div style="display:flex;gap:6px;flex-shrink:0;align-self:flex-start;padding-top:2px" onclick="event.stopPropagation()">
           <button class="btn btn-secondary btn-xs" onclick="openEditActivity('${a.id}')">Edit</button>
           <button class="btn btn-danger btn-xs" onclick="deleteActivity('${a.id}');buildDetailBody('${id}')">Del</button>
         </div>
