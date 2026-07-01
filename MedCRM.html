@@ -2411,7 +2411,7 @@ function normalizeUnicodeChars(text){
 // break before each date and before TOTAL so each schedule row is at least on its own line.
 function reflowScheduleTable(text){
   const dateMatches=text.match(/\d{1,2}\/\d{1,2}\/\d{2,4}/g)||[];
-  if(dateMatches.length<4) return text;
+  if(dateMatches.length<2) return text;
   return text
     .replace(/(\(\d{1,2}\/\d{1,2})\?(\d{1,2}\/\d{1,2}\))/g,'$1-$2')
     .replace(/TOTAL/g,'\n\nTOTAL')
@@ -2540,7 +2540,7 @@ function renderActivityDesc(desc){
   const lines=(desc||'').split('\n');
   const dateLineRe=/^(\d{1,2}\/\d{1,2}\/\d{4})\b(.*)$/;
   const dateLineCount=lines.filter(l=>dateLineRe.test(l.trim())).length;
-  if(dateLineCount<4) return `<div class="activity-desc">${escHtml(desc)}</div>`;
+  if(dateLineCount<2) return `<div class="activity-desc">${escHtml(desc)}</div>`;
   const preambleLines=[],dateLines=[];
   lines.forEach(l=>{
     const t=l.trim();
