@@ -274,6 +274,9 @@ textarea{resize:vertical;min-height:80px}
       <div class="nav-item" onclick="openModal('sf-guide-modal')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Import from Salesforce
       </div>
+      <div class="nav-item" onclick="openModal('import-activities-modal')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Import Calls/Emails
+      </div>
     </div>
     <div style="padding:12px 16px;margin-top:auto;border-top:1px solid #334155">
       <div style="font-size:11px;color:#94a3b8;margin-bottom:8px" id="sidebar-user-email"></div>
@@ -525,6 +528,46 @@ Referred by Dr. Marcus Lee" oninput="runSmartParse()"></textarea>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('sf-guide-modal')">Close</button>
       <button class="btn btn-primary" onclick="closeModal('sf-guide-modal');openModal('import-modal')">→ Go to Import</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ IMPORT ACTIVITIES (SALESFORCE CALLS/EMAILS) MODAL ═══════════ -->
+<div id="import-activities-modal" class="modal-overlay hidden">
+  <div class="modal" style="max-width:700px">
+    <div class="modal-header">
+      <div class="modal-title">📞 Import Calls & Emails from Salesforce</div>
+      <button class="close-btn" onclick="closeModal('import-activities-modal')">✕</button>
+    </div>
+    <div class="modal-body" id="import-activities-modal-body">
+      <div class="import-step">
+        <div class="import-step-title">Step 1 — Export activities from Salesforce</div>
+        <p style="font-size:13px;color:var(--gray);margin-bottom:12px">In Salesforce, run/export an Activities (Tasks &amp; Events) report filtered to Type = Call/Email. Include columns like <span class="code-pill">Name</span> (related Contact), <span class="code-pill">Account Name</span>, <span class="code-pill">Type</span>, <span class="code-pill">Subject</span>, <span class="code-pill">Comments</span>, <span class="code-pill">Date</span>. Export as CSV.</p>
+        <label class="btn btn-primary" style="cursor:pointer;width:fit-content">
+          📂 Choose CSV File
+          <input type="file" accept=".csv,.txt,.xlsx,.xls" style="display:none" onchange="loadActivityFile(event)">
+        </label>
+        <div id="act-csv-status" style="font-size:13px;color:var(--gray);margin-top:10px"></div>
+      </div>
+      <div id="import-activities-mapping-section" class="hidden">
+        <div class="import-step">
+          <div class="import-step-title">Step 2 — Map columns</div>
+          <p style="font-size:13px;color:var(--gray);margin-bottom:12px">Map at least Contact Name and/or Account/Organization so each activity can be matched to the right person or org already in MedCRM.</p>
+          <div id="activity-field-mapping"></div>
+        </div>
+        <div class="import-step">
+          <div class="import-step-title">Step 3 — Preview (first 3 rows)</div>
+          <div id="act-csv-preview" style="overflow-x:auto"></div>
+        </div>
+        <div class="import-step" style="display:flex;align-items:center;gap:10px">
+          <input type="checkbox" id="act-create-missing" checked style="width:16px;height:16px">
+          <label for="act-create-missing" style="font-size:13px;font-weight:500;color:#374151;cursor:pointer">Create a new contact for names that don't match anyone already in MedCRM</label>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('import-activities-modal')">Cancel</button>
+      <button class="btn btn-success" id="do-import-activities-btn" onclick="doImportActivities()" style="display:none">✓ Import Activities</button>
     </div>
   </div>
 </div>
@@ -1866,15 +1909,13 @@ function saveContact(){
     _db.ref('contacts/'+(contacts.length-1)).set(newC);
   }
   const wasEditing=id&&window._detailId===id;
+  const savedId=id;
   closeModal('contact-modal');
-  if(wasEditing){
-    const savedId=id;
-    render();
-    openDetail(savedId);
-  } else {
-    render();
-  }
   toast(`✓ ${name} saved.`);
+  setTimeout(()=>{
+    render();
+    if(wasEditing) openDetail(savedId);
+  },0);
 }
 
 function deleteContact(id){
@@ -2234,6 +2275,153 @@ function doImport(){
   });
   saveAll();closeModal('import-modal');render();
   toast(`✓ Imported ${imported} contacts${skipped?`, skipped ${skipped} (no name)`:''}.`);
+}
+
+// ══════════════════════════════════════════════
+// IMPORT ACTIVITIES (Salesforce Tasks/Events — calls & emails)
+// ══════════════════════════════════════════════
+let _actCsvData=[],_actCsvHeaders=[];
+const SF_ACT_MAP={
+  'name':'contactname','related to':'contactname','contact':'contactname','contact name':'contactname','full name':'contactname','who':'contactname',
+  'account name':'orgname','account':'orgname','company':'orgname','organization':'orgname',
+  'type':'type','task type':'type','activity type':'type',
+  'subject':'subject','task subject':'subject',
+  'comments':'description','description':'description','notes':'description','body':'description',
+  'date':'date','activity date':'date','due date':'date','created date':'date','email date':'date',
+};
+const ACT_CRM_FIELDS=['contactname','orgname','type','subject','description','date'];
+const ACT_CRM_LABELS={contactname:'Contact Name',orgname:'Account / Organization',type:'Activity Type (Call/Email)',subject:'Subject',description:'Comments / Description',date:'Date'};
+
+function loadActivityFile(event){
+  const file=event.target.files[0];
+  if(!file) return;
+  const isXlsx=/\.xlsx?$/i.test(file.name);
+  document.getElementById('act-csv-status').textContent=`Reading ${file.name}…`;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      let rows;
+      if(isXlsx){
+        const wb=XLSX.read(e.target.result,{type:'array'});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        const raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+        rows=raw.map(r=>r.map(v=>String(v==null?'':v).trim()));
+      } else {
+        rows=parseCSVText(e.target.result);
+      }
+      rows=rows.map(r=>r.map(c=>String(c==null?'':c).trim()));
+      let headerIdx=0;
+      for(let i=0;i<Math.min(rows.length,10);i++){
+        const nonEmpty=rows[i].filter(c=>c.length>0);
+        if(nonEmpty.length>=3){headerIdx=i;break;}
+      }
+      const allRows=rows.slice(headerIdx).filter(r=>r.some(c=>c.length>0));
+      if(allRows.length<2){document.getElementById('act-csv-status').textContent='File appears empty or has no data rows.';return;}
+      _actCsvHeaders=allRows[0];
+      _actCsvData=allRows.slice(1);
+      document.getElementById('act-csv-status').textContent=`✓ Loaded ${_actCsvData.length} activities from ${file.name}`;
+      buildActivityMappingUI();
+    }catch(err){document.getElementById('act-csv-status').textContent='Error reading file: '+err.message;}
+  };
+  if(isXlsx) reader.readAsArrayBuffer(file);
+  else reader.readAsText(file);
+}
+
+function buildActivityMappingUI(){
+  document.getElementById('import-activities-mapping-section').classList.remove('hidden');
+  const autoMap={};
+  _actCsvHeaders.forEach((h,i)=>{
+    const key=SF_ACT_MAP[h.toLowerCase().trim()];
+    if(key) autoMap[i]=key;
+  });
+  let mapHTML='<div style="display:grid;grid-template-columns:1fr 24px 1fr;gap:6px;align-items:center;font-size:12px;font-weight:600;color:var(--gray);margin-bottom:6px"><div>Your CSV column</div><div></div><div>MedCRM field</div></div>';
+  _actCsvHeaders.forEach((h,i)=>{
+    const auto=autoMap[i]||'';
+    mapHTML+=`<div class="field-map-row">
+      <div style="font-size:12px;color:#374151;background:#f8fafc;border:1px solid var(--border);border-radius:5px;padding:5px 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(h)}">${escHtml(h)}</div>
+      <div class="field-map-arrow">→</div>
+      <select id="act-map-${i}" style="font-size:12px;padding:5px 8px;border:1px solid var(--border);border-radius:5px;background:#fff;color:#374151">
+        <option value="">— skip —</option>
+        ${ACT_CRM_FIELDS.map(f=>`<option value="${f}" ${auto===f?'selected':''}>${ACT_CRM_LABELS[f]}</option>`).join('')}
+      </select>
+    </div>`;
+  });
+  document.getElementById('activity-field-mapping').innerHTML=mapHTML;
+  const previewRows=_actCsvData.slice(0,3);
+  let tableHTML=`<table class="csv-preview-table"><thead><tr>${_actCsvHeaders.map(h=>`<th>${escHtml(h)}</th>`).join('')}</tr></thead><tbody>`;
+  previewRows.forEach(row=>{
+    tableHTML+=`<tr>${_actCsvHeaders.map((_,i)=>`<td>${escHtml(row[i]||'')}</td>`).join('')}</tr>`;
+  });
+  tableHTML+='</tbody></table>';
+  document.getElementById('act-csv-preview').innerHTML=tableHTML;
+  document.getElementById('do-import-activities-btn').style.display='';
+}
+
+function normalizeActDate(val){
+  if(!val) return new Date().toISOString().slice(0,10);
+  val=val.trim();
+  if(/^\d{4}-\d{2}-\d{2}/.test(val)) return val.slice(0,10);
+  const m=val.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if(m) return `${m[3]}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`;
+  const d=new Date(val);
+  if(!isNaN(d)) return d.toISOString().slice(0,10);
+  return new Date().toISOString().slice(0,10);
+}
+function normalizeActType(val){
+  const v=(val||'').toLowerCase();
+  if(v.includes('email')) return 'email';
+  if(v.includes('call')) return 'call';
+  if(v.includes('meeting')||v.includes('event')) return 'meeting';
+  return 'note';
+}
+// Prefer an exact name+org match, then name-only, then treat the row as an org-level
+// activity if Account Name matches a hospital-type contact (SF tasks logged on the Account, no Contact).
+function findContactForActivity(nameVal,orgVal){
+  const nameNorm=normalize(nameVal);
+  const orgNorm=normalize(orgVal);
+  if(nameNorm){
+    let m=contacts.find(c=>normalize(c.name)===nameNorm&&orgNorm&&normalize(c.org)===orgNorm);
+    if(m) return m;
+    m=contacts.find(c=>normalize(c.name)===nameNorm);
+    if(m) return m;
+  }
+  if(orgNorm){
+    let m=contacts.find(c=>c.type==='hospital'&&normalize(c.name)===orgNorm);
+    if(m) return m;
+  }
+  return null;
+}
+
+function doImportActivities(){
+  const mapping={};
+  _actCsvHeaders.forEach((_,i)=>{
+    const val=document.getElementById('act-map-'+i)?.value;
+    if(val) mapping[i]=val;
+  });
+  if(!Object.values(mapping).includes('contactname')&&!Object.values(mapping).includes('orgname')){
+    toast('Please map at least a Contact Name or Account/Organization column.');return;
+  }
+  const createMissing=document.getElementById('act-create-missing').checked;
+  let imported=0,skipped=0,createdContacts=0;
+  _actCsvData.forEach(row=>{
+    const rec={contactname:'',orgname:'',type:'',subject:'',description:'',date:''};
+    Object.entries(mapping).forEach(([i,field])=>{
+      const val=(row[+i]||'').trim();
+      if(val) rec[field]=val;
+    });
+    if(!rec.contactname&&!rec.orgname){skipped++;return;}
+    let contact=findContactForActivity(rec.contactname,rec.orgname);
+    if(!contact){
+      if(!createMissing){skipped++;return;}
+      contact={id:uid(),created:Date.now(),type:'staff',stage:'Active Contact',name:rec.contactname||rec.orgname,jobtitle:'',specialty:'',org:rec.contactname?rec.orgname:'',phone:'',email:'',location:'',referral:'',followup:'',notes:'',tags:['Imported from Salesforce']};
+      contacts.push(contact);createdContacts++;
+    }
+    const desc=[rec.subject,rec.description].filter(Boolean).join(' — ')||'(No description)';
+    activities.push({id:uid(),contactId:contact.id,type:normalizeActType(rec.type),date:normalizeActDate(rec.date),desc,created:Date.now()});
+    imported++;
+  });
+  saveAll();closeModal('import-activities-modal');render();
+  toast(`✓ Imported ${imported} activities${createdContacts?`, created ${createdContacts} new contacts`:''}${skipped?`, skipped ${skipped}`:''}.`);
 }
 
 // ══════════════════════════════════════════════
@@ -2658,10 +2846,11 @@ function renderEmailsTab(contact,id){
   loadEmailsFromFirebase().then(allEmails=>{
     const listEl=document.getElementById('emails-list-'+id);
     if(!listEl) return;
-    const search=[contact.email,contact.email2,contact.name].filter(Boolean).map(s=>s.toLowerCase());
+    const emailAddrs=[contact.email,contact.email2].filter(Boolean).map(s=>s.toLowerCase());
     const items=allEmails.filter(e=>{
-      const hay=(e.from+' '+e.to+' '+e.subject+' '+e.preview).toLowerCase();
-      return search.some(s=>hay.includes(s));
+      if(!emailAddrs.length) return false; // no email on contact — don't guess
+      const fromTo=(e.from+' '+e.to).toLowerCase();
+      return emailAddrs.some(s=>fromTo.includes(s));
     }).sort((a,b)=>(b.received||0)-(a.received||0)).slice(0,100);
     if(!items.length){
       listEl.innerHTML=`<div style="text-align:center;padding:24px"><div style="font-size:28px;margin-bottom:8px">📭</div><div style="color:var(--gray);font-size:12px">No synced emails yet.<br>Emails will appear here after Power Automate captures them.</div></div>`;
