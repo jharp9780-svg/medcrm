@@ -2005,13 +2005,17 @@ function saveActivity(){
   const editId=document.getElementById('act-edit-id').value;
   const type=document.getElementById('act-type').value;
   const date=document.getElementById('act-date').value;
+  // Write only the one changed/added activity, not the whole array — with 10,000+ activities
+  // after the Salesforce import, a full-array write was visibly slow.
+  let idx;
   if(editId){
-    const a=activities.find(x=>x.id===editId);
-    if(a){a.type=type;a.date=date;a.desc=desc;}
+    idx=activities.findIndex(x=>x.id===editId);
+    if(idx>=0) activities[idx]={...activities[idx],type,date,desc};
   }else{
     activities.push({id:uid(),contactId,type,date,desc,created:Date.now()});
+    idx=activities.length-1;
   }
-  _db.ref('activities').set(activities);
+  if(idx>=0) _db.ref('activities/'+idx).set(activities[idx]);
   invalidateCache();
   closeModal('activity-modal');
   if(window._detailId===contactId) buildDetailBody(contactId);
@@ -2517,18 +2521,20 @@ function findContactForActivity(nameVal,orgVal){
 function cleanupUntaggedBulkImport(){
   const untagged=activities.filter(a=>!a.source);
   if(untagged.length<20) return 0;
-  const times=untagged.map(a=>a.created).sort((a,b)=>a-b);
+  const sorted=[...untagged].sort((a,b)=>a.created-b.created);
   let bestStart=0,bestEnd=0,curStart=0;
-  for(let i=1;i<times.length;i++){
-    if(times[i]-times[i-1]>60000){
+  for(let i=1;i<sorted.length;i++){
+    if(sorted[i].created-sorted[i-1].created>60000){
       if(i-1-curStart>bestEnd-bestStart){bestStart=curStart;bestEnd=i-1;}
       curStart=i;
     }
   }
-  if(times.length-1-curStart>bestEnd-bestStart){bestStart=curStart;bestEnd=times.length-1;}
+  if(sorted.length-1-curStart>bestEnd-bestStart){bestStart=curStart;bestEnd=sorted.length-1;}
   if(bestEnd-bestStart<20) return 0;
-  const rangeStart=times[bestStart],rangeEnd=times[bestEnd];
-  const toRemove=new Set(untagged.filter(a=>a.created>=rangeStart&&a.created<=rangeEnd).map(a=>a.id));
+  // Remove only the activities actually inside the contiguous cluster (by id), never by a
+  // min/max timestamp range — a range check could sweep in an unrelated activity that merely
+  // happened to be created at some point between the cluster's earliest and latest entries.
+  const toRemove=new Set(sorted.slice(bestStart,bestEnd+1).map(a=>a.id));
   activities=activities.filter(a=>!toRemove.has(a.id));
   return toRemove.size;
 }
