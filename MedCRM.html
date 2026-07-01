@@ -1823,60 +1823,19 @@ function switchTab(tab){
   else if(tab==='stage') el.innerHTML=renderStageTab(id);
 }
 
-function toggleActInPlace(aid){
-  const a=activities.find(x=>x.id===aid);
-  if(!a) return;
-  const row=document.getElementById('act-row-'+aid);
-  if(!row) return;
-  const body=row.querySelector('.act-body-content');
-  const chevron=row.querySelector('.act-chevron');
-  const isOpen=row.dataset.open==='1';
-  if(isOpen){
-    row.dataset.open='0';
-    row.style.background='#fff';
-    row.style.borderLeft='none';
-    row.style.paddingLeft='';
-    body.style.whiteSpace='nowrap';
-    body.style.overflow='hidden';
-    body.style.textOverflow='ellipsis';
-    const firstLine=(a.desc||'').split('\n').find(l=>l.trim())||'';
-    body.innerHTML=escHtml(firstLine)||'<span style="color:#94a3b8;font-style:italic">no content</span>';
-    if(chevron) chevron.textContent='▼ view';
-  } else {
-    row.dataset.open='1';
-    row.style.background='#f0f7ff';
-    row.style.borderLeft='3px solid #3b82f6';
-    row.style.paddingLeft='11px';
-    body.style.whiteSpace='normal';
-    body.style.overflow='visible';
-    body.style.textOverflow='clip';
-    const fullDesc=(a.desc||'').trim();
-    body.innerHTML=fullDesc
-      ? renderActivityDesc(fullDesc)
-      : `<div style="color:#94a3b8;font-style:italic;font-size:12px">No additional content was recorded for this activity.</div>`;
-    if(chevron) chevron.textContent='▲ close';
-  }
-}
-
 function renderActsTab(acts,id){
   return `<div style="margin-bottom:12px"><button class="btn btn-primary btn-sm" onclick="openLogActivity('${id}')">+ Log Activity</button></div>
-    <div>${acts.length?acts.map(a=>{
-      const firstLine=(a.desc||'').split('\n').find(l=>l.trim())||'';
-      return `<div id="act-row-${a.id}" data-open="0" class="activity-item" style="cursor:pointer;background:#fff;transition:background .1s" onmouseenter="this.style.background='#f8fafc'" onmouseleave="this.style.background='#fff'" onclick="toggleActInPlace('${a.id}')">
-        <div class="activity-icon ${ACT_CLASSES[a.type]||'act-note'}">${ACT_ICONS[a.type]||'📝'}</div>
-        <div class="activity-body" style="min-width:0;overflow:hidden">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-            <span style="font-size:11px;color:#64748b;white-space:nowrap">${formatDate(a.date)} · ${a.type}</span>
-            <span class="act-chevron" style="font-size:9px;color:#94a3b8;margin-left:auto;flex-shrink:0">▼ view</span>
-          </div>
-          <div class="act-body-content" style="font-size:12.5px;color:#374151;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(firstLine)||'<span style="color:#94a3b8;font-style:italic">click to view</span>'}</div>
-        </div>
-        <div style="display:flex;gap:6px;flex-shrink:0;align-self:flex-start;padding-top:2px" onclick="event.stopPropagation()">
-          <button class="btn btn-secondary btn-xs" onclick="openEditActivity('${a.id}')">Edit</button>
-          <button class="btn btn-danger btn-xs" onclick="deleteActivity('${a.id}');buildDetailBody('${id}')">Del</button>
-        </div>
-      </div>`;
-    }).join(''):`<div class="empty" style="padding:20px 0"><div class="empty-icon">🕐</div><div class="empty-sub">No activity yet. Log a call, email, or meeting above.</div></div>`}</div>`;
+    <div>${acts.length?acts.map(a=>`<div class="activity-item">
+      <div class="activity-icon ${ACT_CLASSES[a.type]||'act-note'}">${ACT_ICONS[a.type]||'📝'}</div>
+      <div class="activity-body">
+        <div style="font-size:11px;color:#64748b;margin-bottom:6px">${formatDate(a.date)} · ${a.type}</div>
+        ${renderActivityDesc(a.desc)}
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0;align-self:flex-start">
+        <button class="btn btn-secondary btn-xs" onclick="openEditActivity('${a.id}')">Edit</button>
+        <button class="btn btn-danger btn-xs" onclick="deleteActivity('${a.id}');buildDetailBody('${id}')">Del</button>
+      </div>
+    </div>`).join(''):`<div class="empty" style="padding:20px 0"><div class="empty-icon">🕐</div><div class="empty-sub">No activity yet. Log a call, email, or meeting above.</div></div>`}</div>`;
 }
 
 function renderDocsTab(docs,id){
