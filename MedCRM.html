@@ -2391,11 +2391,22 @@ function decodeHtmlEntities(text){
   if(!text) return text;
   return text.replace(/&#?\w+;/g,m=>HTML_ENTITIES[m]||m);
 }
+// Salesforce's .xls export carries smart quotes/dashes/non-breaking spaces that sometimes render
+// as stray "?" glyphs — flatten them to plain equivalents so the text is always safe to read.
+function normalizeUnicodeChars(text){
+  if(!text) return text;
+  return text
+    .replace(/[‘’]/g,"'")
+    .replace(/[“”]/g,'"')
+    .replace(/[–—]/g,'-')
+    .replace(/ /g,' ')
+    .replace(/[​‌‍﻿]/g,'');
+}
 // Salesforce report exports flatten email bodies into one line with no real line breaks —
 // reconstruct readable structure by breaking before the repeating To:/CC:/Subject:/Body: envelope labels.
 function prettifyDescription(text){
   if(!text) return text;
-  text=decodeHtmlEntities(text);
+  text=normalizeUnicodeChars(decodeHtmlEntities(text));
   return text.replace(/\s*(To:|CC:|BCC:|Attachment:|Subject:|Body:|From:|Sent:)\s*/g,'\n$1 ').replace(/^\n+/,'').trim();
 }
 // Prefer an exact name+org match, then name-only, then treat the row as an org-level
@@ -2467,7 +2478,7 @@ function doImportActivities(){
       contact={id:uid(),created:Date.now(),type:'staff',stage:'Active Contact',name:rec.contactname||rec.orgname,jobtitle:'',specialty:'',org:rec.contactname?rec.orgname:'',phone:'',email:'',location:'',referral:'',followup:'',notes:'',tags:['Imported from Salesforce']};
       contacts.push(contact);createdContacts++;
     }
-    const desc=[decodeHtmlEntities(rec.subject),prettifyDescription(rec.description)].filter(Boolean).join('\n\n')||'(No description)';
+    const desc=[normalizeUnicodeChars(decodeHtmlEntities(rec.subject)),prettifyDescription(rec.description)].filter(Boolean).join('\n\n')||'(No description)';
     activities.push({id:uid(),contactId:contact.id,type:normalizeActType(rec.type,rec.subject),date:normalizeActDate(rec.date),desc,created:Date.now(),source:'sf-import'});
     imported++;
   });
