@@ -2066,7 +2066,7 @@ function runSmartParse(){
     <div style="font-size:12px;font-weight:700;color:#15803d;margin-bottom:10px">✓ Detected — edit anything before saving:</div>
     ${keys.map(k=>{
       const label=PASTE_FIELD_LABELS[k]||k;
-      if(k==='type') return `<div class="parsed-row"><span class="parsed-label">${label}</span><select id="pp-${k}" style="flex:1;padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px"><option value="doctor"${_parsed[k]==='doctor'?' selected':''}>Doctor</option><option value="hospital"${_parsed[k]==='hospital'?' selected':''}>Hospital</option></select></div>`;
+      if(k==='type') return `<div class="parsed-row"><span class="parsed-label">${label}</span><select id="pp-${k}" style="flex:1;padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px"><option value="doctor"${_parsed[k]==='doctor'?' selected':''}>Doctor</option><option value="hospital"${_parsed[k]==='hospital'?' selected':''}>Hospital</option><option value="staff"${_parsed[k]==='staff'?' selected':''}>Hospital Staff</option></select></div>`;
       if(k==='specialty') return `<div class="parsed-row"><span class="parsed-label">${label}</span><select id="pp-${k}" style="flex:1;padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px"><option value="">— none —</option>${SPECIALTIES.map(s=>`<option value="${s}"${_parsed[k]===s?' selected':''}>${s}</option>`).join('')}</select></div>`;
       return `<div class="parsed-row"><span class="parsed-label">${label}</span><input id="pp-${k}" type="text" value="${escHtml(_parsed[k])}" style="flex:1;padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px" oninput="_parsed['${k}']=this.value"></div>`;
     }).join('')}
