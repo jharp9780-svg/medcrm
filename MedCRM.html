@@ -932,7 +932,7 @@ function renderDashboard(){
               <div class="activity-icon ${ACT_CLASSES[a.type]||'act-note'}">${ACT_ICONS[a.type]||'📝'}</div>
               <div class="activity-body">
                 <div class="activity-contact clickable" onclick="openDetail('${a.contactId}')">${c?escHtml(c.name):'Unknown'}</div>
-                <div class="activity-desc">${escHtml(a.desc)}</div>
+                ${renderActivityDesc(a.desc)}
                 <div class="activity-meta">${formatDate(a.date)} · ${a.type}</div>
               </div>
             </div>`;
@@ -1648,7 +1648,7 @@ function renderActivity(){
                 ${c?`<span class="badge type-badge-${c.type}" style="font-size:10px">${c.type==='doctor'?'Dr':'Hosp'}</span>`:''}
                 ${c?`<span class="badge ${STAGE_COLORS[c.stage]||'badge-gray'}" style="font-size:10px">${c.stage}</span>`:''}
               </div>
-              <div class="activity-desc">${escHtml(a.desc)}</div>
+              ${renderActivityDesc(a.desc)}
               <div class="activity-meta">${formatDate(a.date)} · ${a.type}${c&&c.org?` · ${escHtml(c.org)}`:''}</div>
             </div>
             <button class="btn btn-danger btn-xs" style="flex-shrink:0" onclick="deleteActivity('${a.id}')">Del</button>
@@ -1772,7 +1772,7 @@ function renderActsTab(acts,id){
   return `<div style="margin-bottom:12px"><button class="btn btn-primary btn-sm" onclick="openLogActivity('${id}')">+ Log Activity</button></div>
     <div>${acts.length?acts.map(a=>`<div class="activity-item">
       <div class="activity-icon ${ACT_CLASSES[a.type]||'act-note'}">${ACT_ICONS[a.type]||'📝'}</div>
-      <div class="activity-body"><div class="activity-desc" style="white-space:pre-wrap">${escHtml(a.desc)}</div><div class="activity-meta">${formatDate(a.date)} · ${a.type}</div></div>
+      <div class="activity-body">${renderActivityDesc(a.desc)}<div class="activity-meta">${formatDate(a.date)} · ${a.type}</div></div>
       <button class="btn btn-danger btn-xs" onclick="deleteActivity('${a.id}');buildDetailBody('${id}')">Del</button>
     </div>`).join(''):`<div class="empty" style="padding:20px 0"><div class="empty-icon">🕐</div><div class="empty-sub">No activity yet. Log a call, email, or meeting above.</div></div>`}</div>`;
 }
@@ -2533,6 +2533,25 @@ function specBadge(specialty){
   return `<span class="spec-badge ${cls}">${emoji} ${escHtml(specialty)}</span>`;
 }
 function escHtml(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+// Renders a schedule/shift-assignment email body (many lines each starting with a date) as an
+// actual two-column table instead of a wall of text — Salesforce's export strips the original HTML
+// table structure, so this is a best-effort Date | Details split rather than a true multi-column grid.
+function renderActivityDesc(desc){
+  const lines=(desc||'').split('\n');
+  const dateLineRe=/^(\d{1,2}\/\d{1,2}\/\d{4})\b(.*)$/;
+  const dateLineCount=lines.filter(l=>dateLineRe.test(l.trim())).length;
+  if(dateLineCount<4) return `<div class="activity-desc">${escHtml(desc)}</div>`;
+  const preambleLines=[],rows=[];
+  lines.forEach(l=>{
+    const t=l.trim();
+    const m=t.match(dateLineRe);
+    if(m) rows.push({date:m[1],rest:m[2].trim()});
+    else if(t) preambleLines.push(t);
+  });
+  const preamble=preambleLines.length?`<div class="activity-desc" style="margin-bottom:8px">${escHtml(preambleLines.join('\n'))}</div>`:'';
+  const tableRows=rows.map(r=>`<tr><td style="padding:3px 12px 3px 0;white-space:nowrap;font-weight:600;color:#1e293b;vertical-align:top;font-size:12.5px">${escHtml(r.date)}</td><td style="padding:3px 0;color:#374151;font-size:12.5px">${escHtml(r.rest)}</td></tr>`).join('');
+  return `${preamble}<table style="border-collapse:collapse">${tableRows}</table>`;
+}
 function initials(name){return(name||'').split(' ').filter(Boolean).map(w=>w[0]).join('').toUpperCase().slice(0,2)}
 function formatDate(d){if(!d) return '—';const[y,m,day]=d.split('-');const mo=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return`${mo[+m-1]} ${+day}, ${y}`}
 function isDue(d){return d&&d<=new Date().toISOString().slice(0,10)}
