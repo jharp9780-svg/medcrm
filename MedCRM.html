@@ -426,11 +426,12 @@ Referred by Dr. Marcus Lee" oninput="runSmartParse()"></textarea>
 <div id="activity-modal" class="modal-overlay hidden" style="z-index:200">
   <div class="modal" style="max-width:480px">
     <div class="modal-header">
-      <div class="modal-title">Log Activity</div>
+      <div class="modal-title" id="activity-modal-title">Log Activity</div>
       <button class="close-btn" onclick="closeModal('activity-modal')">✕</button>
     </div>
     <div class="modal-body">
       <input type="hidden" id="act-contact-id">
+      <input type="hidden" id="act-edit-id">
       <div class="form-group">
         <label>Type *</label>
         <select id="act-type">
@@ -452,7 +453,7 @@ Referred by Dr. Marcus Lee" oninput="runSmartParse()"></textarea>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('activity-modal')">Cancel</button>
-      <button class="btn btn-primary" onclick="saveActivity()">Log Activity</button>
+      <button class="btn btn-primary" id="activity-modal-save-btn" onclick="saveActivity()">Log Activity</button>
     </div>
   </div>
 </div>
@@ -1651,7 +1652,10 @@ function renderActivity(){
               ${renderActivityDesc(a.desc)}
               <div class="activity-meta">${formatDate(a.date)} · ${a.type}${c&&c.org?` · ${escHtml(c.org)}`:''}</div>
             </div>
-            <button class="btn btn-danger btn-xs" style="flex-shrink:0" onclick="deleteActivity('${a.id}')">Del</button>
+            <div style="display:flex;gap:6px;flex-shrink:0">
+              <button class="btn btn-secondary btn-xs" onclick="openEditActivity('${a.id}')">Edit</button>
+              <button class="btn btn-danger btn-xs" onclick="deleteActivity('${a.id}')">Del</button>
+            </div>
           </div>`;
         }).join(''):`<div class="empty"><div class="empty-icon">🕐</div><div class="empty-title">No activity logged</div><div class="empty-sub">Open a contact and log calls, emails, or meetings.</div></div>`}
       </div>
@@ -1773,7 +1777,10 @@ function renderActsTab(acts,id){
     <div>${acts.length?acts.map(a=>`<div class="activity-item">
       <div class="activity-icon ${ACT_CLASSES[a.type]||'act-note'}">${ACT_ICONS[a.type]||'📝'}</div>
       <div class="activity-body">${renderActivityDesc(a.desc)}<div class="activity-meta">${formatDate(a.date)} · ${a.type}</div></div>
-      <button class="btn btn-danger btn-xs" onclick="deleteActivity('${a.id}');buildDetailBody('${id}')">Del</button>
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        <button class="btn btn-secondary btn-xs" onclick="openEditActivity('${a.id}')">Edit</button>
+        <button class="btn btn-danger btn-xs" onclick="deleteActivity('${a.id}');buildDetailBody('${id}')">Del</button>
+      </div>
     </div>`).join(''):`<div class="empty" style="padding:20px 0"><div class="empty-icon">🕐</div><div class="empty-sub">No activity yet. Log a call, email, or meeting above.</div></div>`}</div>`;
 }
 
@@ -1937,21 +1944,44 @@ function deleteContact(id){
 // ══════════════════════════════════════════════
 function openLogActivity(contactId){
   document.getElementById('act-contact-id').value=contactId;
+  document.getElementById('act-edit-id').value='';
+  document.getElementById('activity-modal-title').textContent='Log Activity';
+  document.getElementById('activity-modal-save-btn').textContent='Log Activity';
   document.getElementById('act-type').value='call';
   document.getElementById('act-date').value=new Date().toISOString().slice(0,10);
   document.getElementById('act-desc').value='';
+  openModal('activity-modal');
+}
+function openEditActivity(activityId){
+  const a=activities.find(x=>x.id===activityId);
+  if(!a) return;
+  document.getElementById('act-contact-id').value=a.contactId;
+  document.getElementById('act-edit-id').value=a.id;
+  document.getElementById('activity-modal-title').textContent='Edit Activity';
+  document.getElementById('activity-modal-save-btn').textContent='Save Changes';
+  document.getElementById('act-type').value=a.type;
+  document.getElementById('act-date').value=a.date;
+  document.getElementById('act-desc').value=a.desc;
   openModal('activity-modal');
 }
 function saveActivity(){
   const desc=document.getElementById('act-desc').value.trim();
   if(!desc){toast('Description is required.');return;}
   const contactId=document.getElementById('act-contact-id').value;
-  const newAct={id:uid(),contactId,type:document.getElementById('act-type').value,date:document.getElementById('act-date').value,desc,created:Date.now()};
-  activities.push(newAct);
-  _db.ref('activities').push(newAct);
+  const editId=document.getElementById('act-edit-id').value;
+  const type=document.getElementById('act-type').value;
+  const date=document.getElementById('act-date').value;
+  if(editId){
+    const a=activities.find(x=>x.id===editId);
+    if(a){a.type=type;a.date=date;a.desc=desc;}
+  }else{
+    activities.push({id:uid(),contactId,type,date,desc,created:Date.now()});
+  }
+  _db.ref('activities').set(activities);
+  invalidateCache();
   closeModal('activity-modal');
   if(window._detailId===contactId) buildDetailBody(contactId);
-  render();toast('✓ Activity logged.');
+  render();toast(editId?'✓ Activity updated.':'✓ Activity logged.');
 }
 function deleteActivity(id){
   if(!confirm('Delete this activity?')) return;
