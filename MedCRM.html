@@ -2845,7 +2845,8 @@ function runMigrations(){
   const newHospArr=Object.values(newHospitals);
   if(newHospArr.length){
     newHospArr.forEach(h=>contacts.push(h));
-    changed=true;c._migrationDirty=true;
+    newHospArr.forEach(h=>{h._migrationDirty=true;});
+    changed=true;
   }
 
   // Migrate Salesforce group labels → stage=Hired, clear org
