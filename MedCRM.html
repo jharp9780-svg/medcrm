@@ -772,10 +772,12 @@ _auth.onAuthStateChanged(async user=>{
     if(contacts.length){ saveAll(); toast(`✅ Migrated ${contacts.length} contacts to cloud`); }
   }
 
-  // Migrations run once per session only — they're expensive on 9000+ contacts
-  if(!sessionStorage.getItem('_migDone')){
+  // Migrations run once ever (localStorage persists across refreshes/sessions)
+  // Bump _MIG_VERSION when new migrations are added to force a re-run
+  const _MIG_VERSION='6';
+  if(localStorage.getItem('_migVersion')!==_MIG_VERSION){
     runMigrations();
-    sessionStorage.setItem('_migDone','1');
+    localStorage.setItem('_migVersion',_MIG_VERSION);
   }
 
   // Load activities and documents in background, then render once with everything
