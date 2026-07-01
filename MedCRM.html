@@ -2413,8 +2413,12 @@ function reflowScheduleTable(text){
   const dateMatches=text.match(/\d{1,2}\/\d{1,2}\/\d{2,4}/g)||[];
   if(dateMatches.length<4) return text;
   return text
+    .replace(/(\(\d{1,2}\/\d{1,2})\?(\d{1,2}\/\d{1,2}\))/g,'$1-$2')
+    .replace(/TOTAL/g,'\n\nTOTAL')
     .replace(/(\d{1,2}\/\d{1,2}\/\d{4})/g,'\n$1')
-    .replace(/\bTOTAL\b/g,'\n\nTOTAL');
+    .replace(/([a-z])([A-Z])/g,'$1 $2')
+    .replace(/([A-Za-z])(\d)/g,'$1 $2')
+    .replace(/(\d)([A-Za-z])/g,'$1 $2');
 }
 // Salesforce report exports flatten email bodies into one line with no real line breaks —
 // reconstruct readable structure by breaking before the repeating To:/CC:/Subject:/Body: envelope labels.
