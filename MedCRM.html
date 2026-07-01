@@ -2609,8 +2609,20 @@ function escHtml(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').rep
 // (no such suffix) — rather than interleaved US/local pairs. Bucket by that format signature and
 // zip same-index entries together; only do this when both buckets are non-empty and equal in size,
 // so a mismatch never produces a fabricated pairing.
+function cleanActivityDesc(desc){
+  if(!desc) return '';
+  return desc
+    // Replace corrupted bullet chars (? at start of line, or common Salesforce encoding artifacts)
+    .replace(/^[?â€¢Â·¿�]\s*/gm,'• ')
+    // Replace "o " used as a sub-bullet
+    .replace(/^o\s+/gm,'  ◦ ')
+    // Collapse 3+ blank lines into 2
+    .replace(/\n{3,}/g,'\n\n')
+    .trim();
+}
 function renderActivityDesc(desc){
-  const lines=(desc||'').split('\n');
+  const cleaned=cleanActivityDesc(desc);
+  const lines=cleaned.split('\n');
   const dateLineRe=/^(\d{1,2}\/\d{1,2}\/\d{4})\b(.*)$/;
   const usFormatRe=/\(\d{1,2}\/\d{1,2}-\d{1,2}\/\d{1,2}\)\s*[A-Za-z-]+\s*[\d.]+\s*$/;
   const preambleLines=[],allRows=[],usRows=[],localRows=[];
@@ -2623,7 +2635,7 @@ function renderActivityDesc(desc){
       if(usFormatRe.test(t)) usRows.push(entry); else localRows.push(entry);
     } else if(t) preambleLines.push(t);
   });
-  if(allRows.length<2) return `<div class="activity-desc">${escHtml(desc)}</div>`;
+  if(allRows.length<2) return `<div class="activity-desc">${escHtml(cleaned)}</div>`;
   const preamble=preambleLines.length?`<div class="activity-desc" style="margin-bottom:8px">${escHtml(preambleLines.join('\n'))}</div>`:'';
   if(usRows.length&&localRows.length&&usRows.length===localRows.length){
     const headerRow='<tr><th style="text-align:left;padding:4px 12px 4px 0;font-size:11px;color:var(--gray);border-bottom:1px solid var(--border)">US Date / Time</th><th style="text-align:left;padding:4px 0;font-size:11px;color:var(--gray);border-bottom:1px solid var(--border)">Local Date / Time</th></tr>';
@@ -2689,7 +2701,7 @@ function runMigrations(){
   contacts.forEach(c=>{
     if(adminSpecs.has(c.specialty)){
       if(!c.jobtitle) c.jobtitle=c.specialty;
-      c.specialty='';changed=true;
+      c.specialty='';changed=true;c._migrationDirty=true;
     }
   });
   // Auto-detect specialty from job title
@@ -2698,7 +2710,7 @@ function runMigrations(){
     const text=(c.jobtitle||'')+' '+(c.notes||'');
     if(!text.trim()) return;
     for(const [re,spec] of TITLE_TO_SPEC){
-      if(re.test(text)){c.specialty=spec;changed=true;break;}
+      if(re.test(text)){c.specialty=spec;changed=true;c._migrationDirty=true;break;}
     }
   });
   // Reclassify contacts whose NAME looks like a facility as type=hospital
@@ -2709,7 +2721,7 @@ function runMigrations(){
       c.type='hospital';
       // hospitals shouldn't have a medical specialty
       if(c.specialty) c.specialty='';
-      changed=true;
+      changed=true;c._migrationDirty=true;
     }
   });
   // Auto-create hospital contacts from doctor email domains
@@ -2827,13 +2839,13 @@ function runMigrations(){
         newHospitals[hospName.toLowerCase()]={id:uid(),created:Date.now(),name:hospName,type:'hospital',stage:'Prospect',org:'',jobtitle:'',specialty:'',serviceLine:'',phone:'',email:'',email2:'',location:'',referral:'Auto-detected from email domain',followup:'',notes:'',tags:[]};
       }
       // Always link contact to hospital via org field
-      c.org=hospName;changed=true;
+      c.org=hospName;changed=true;c._migrationDirty=true;
     });
   });
   const newHospArr=Object.values(newHospitals);
   if(newHospArr.length){
     newHospArr.forEach(h=>contacts.push(h));
-    changed=true;
+    changed=true;c._migrationDirty=true;
   }
 
   // Migrate Salesforce group labels → stage=Hired, clear org
@@ -2852,10 +2864,15 @@ function runMigrations(){
       c.stage='Hired';
       if(!c.specialty) c.specialty=spec;
       c.org='';
-      changed=true;
+      changed=true;c._migrationDirty=true;
     }
   });
-  if(changed) saveAll();
+  if(changed){
+    // Write only changed contacts individually to avoid Firebase size limit
+    contacts.forEach((c,i)=>{
+      if(c._migrationDirty){delete c._migrationDirty;_db.ref('contacts/'+i).set(c);}
+    });
+  }
 }
 
 // ══════════════════════════════════════════════
