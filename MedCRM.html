@@ -755,18 +755,13 @@ _auth.onAuthStateChanged(async user=>{
   const el=document.getElementById('sidebar-user-email');
   if(el) el.textContent=user.email;
 
-  // Load from Firebase
-  const [cSnap,aSnap,dSnap]=await Promise.all([
-    _db.ref('contacts').once('value'),
-    _db.ref('activities').once('value'),
-    _db.ref('documents').once('value')
-  ]);
   function toArr(v){if(!v) return [];if(Array.isArray(v)) return v;return Object.values(v);}
-  contacts  = toArr(cSnap.val());
-  activities= toArr(aSnap.val());
-  documents = toArr(dSnap.val());
 
-  // One-time migration: if Firebase is empty, upload from localStorage
+  // Show app immediately with contacts — fastest path
+  const cSnap=await _db.ref('contacts').once('value');
+  contacts=toArr(cSnap.val());
+
+  // One-time migration from localStorage
   if(!contacts.length){
     const lc=localStorage.getItem('medcrm2_contacts');
     if(lc){ try{ contacts=JSON.parse(lc)||[]; }catch{} }
@@ -777,9 +772,17 @@ _auth.onAuthStateChanged(async user=>{
     if(contacts.length){ saveAll(); toast(`✅ Migrated ${contacts.length} contacts to cloud`); }
   }
 
-  // Run migrations then render
   runMigrations();
-  render();
+  render(); // render immediately with contacts — no waiting for activities/docs
+
+  // Load activities and documents in background, then quietly refresh
+  const [aSnap,dSnap]=await Promise.all([
+    _db.ref('activities').once('value'),
+    _db.ref('documents').once('value')
+  ]);
+  activities=toArr(aSnap.val());
+  documents=toArr(dSnap.val());
+  render(); // refresh with full data
 });
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
 
@@ -1815,19 +1818,33 @@ function switchTab(tab){
   else if(tab==='stage') el.innerHTML=renderStageTab(id);
 }
 
+let _actExpanded=new Set();
+function toggleAct(aid){if(_actExpanded.has(aid))_actExpanded.delete(aid);else _actExpanded.add(aid);}
+
 function renderActsTab(acts,id){
   return `<div style="margin-bottom:12px"><button class="btn btn-primary btn-sm" onclick="openLogActivity('${id}')">+ Log Activity</button></div>
-    <div>${acts.length?acts.map(a=>`<div class="activity-item">
-      <div class="activity-icon ${ACT_CLASSES[a.type]||'act-note'}">${ACT_ICONS[a.type]||'📝'}</div>
-      <div class="activity-body">
-        ${renderActivityDesc(a.desc)}
-        <div class="activity-meta">${formatDate(a.date)} · ${a.type}</div>
-      </div>
-      <div style="display:flex;gap:6px;flex-shrink:0">
-        <button class="btn btn-secondary btn-xs" onclick="openEditActivity('${a.id}')">Edit</button>
-        <button class="btn btn-danger btn-xs" onclick="deleteActivity('${a.id}');buildDetailBody('${id}')">Del</button>
-      </div>
-    </div>`).join(''):`<div class="empty" style="padding:20px 0"><div class="empty-icon">🕐</div><div class="empty-sub">No activity yet. Log a call, email, or meeting above.</div></div>`}</div>`;
+    <div>${acts.length?acts.map(a=>{
+      const open=_actExpanded.has(a.id);
+      const firstLine=(a.desc||'').split('\n').find(l=>l.trim())||'(no content)';
+      const hasMore=(a.desc||'').trim().length>firstLine.length+2;
+      return `<div class="activity-item" style="cursor:pointer;user-select:none" onclick="toggleAct('${a.id}');buildDetailBody('${id}')">
+        <div class="activity-icon ${ACT_CLASSES[a.type]||'act-note'}">${ACT_ICONS[a.type]||'📝'}</div>
+        <div class="activity-body" style="min-width:0">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:${open?'8':'2'}px">
+            <span style="font-size:11px;color:#64748b;white-space:nowrap">${formatDate(a.date)} · ${a.type}</span>
+            ${hasMore?`<span style="font-size:10px;color:#94a3b8;margin-left:auto">${open?'▲ collapse':'▼ expand'}</span>`:''}
+          </div>
+          ${open
+            ? renderActivityDesc(a.desc)
+            : `<div style="font-size:12.5px;color:#374151;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:420px">${escHtml(firstLine)}</div>`
+          }
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0" onclick="event.stopPropagation()">
+          <button class="btn btn-secondary btn-xs" onclick="openEditActivity('${a.id}')">Edit</button>
+          <button class="btn btn-danger btn-xs" onclick="deleteActivity('${a.id}');buildDetailBody('${id}')">Del</button>
+        </div>
+      </div>`;
+    }).join(''):`<div class="empty" style="padding:20px 0"><div class="empty-icon">🕐</div><div class="empty-sub">No activity yet. Log a call, email, or meeting above.</div></div>`}</div>`;
 }
 
 function renderDocsTab(docs,id){
