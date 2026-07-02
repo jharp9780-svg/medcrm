@@ -2841,13 +2841,23 @@ const _STOP_SECTION_RE=/^(Original Message Details|Message Hops|Notification Det
 
 function renderActivityDesc(desc){
   if(!desc) return '';
-  const text=desc
+  let text=desc
     .replace(/â€¢/g,'•').replace(/â€"/g,'–').replace(/â€œ/g,'"').replace(/â€"/g,'"')
     .replace(/Â·/g,'·').replace(/Ã©/g,'é').replace(/Â /g,' ').replace(/�/g,'')
     .replace(/^[?Â¿]\s*/gm,'• ')
     .replace(/\r\n/g,'\n').replace(/\r/g,'\n')
     .replace(/\n{3,}/g,'\n\n')
     .trim();
+  // Fix missing spaces at lowercase→uppercase joins (e.g. "sorryI" → "sorry I")
+  text=text.replace(/([a-z])([A-Z])/g,'$1 $2');
+  // Fix missing spaces after sentence-ending punctuation before capital (e.g. "credential.Do" → "credential. Do")
+  text=text.replace(/([.!?])([A-Z])/g,'$1 $2');
+  // Break before quoted reply headers ("On Mon, Jan 1..." style)
+  text=text.replace(/(On\s+(?:Sun|Mon|Tue|Wed|Thu|Fri|Sat),?\s+\w+\s+\d{1,2},?\s+\d{4})/g,'\n\n$1');
+  // Break before email envelope headers that got concatenated
+  text=text.replace(/\s*(To:|From:|CC:|BCC:|Subject:|Sent:|Attachment:)/g,'\n$1');
+  // Break before common closings run into body text
+  text=text.replace(/([^\n])\n?(Best(?:\s+[Rr]egards)?|Thanks|Sincerely|Regards|Cheers|Best wishes),/g,'$1\n\n$2,');
   if(!text) return '';
 
   const emailHeaderRe=/^(To|From|CC|BCC|Subject|Sent|Attachment):\s*/i;
