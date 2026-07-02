@@ -2656,9 +2656,12 @@ function cleanActivityDesc(desc){
     .replace(/\n{3,}/g,'\n\n')
     .trim();
 }
+// Technical email routing headers to strip entirely
+const _TECH_HEADER_RE=/^(ARC-Seal|ARC-Message-Signature|ARC-Authentication-Results|DKIM-Signature|Received|Message-ID|Content-Type|MIME-Version|X-MS-|X-Google-|X-Forwarded-|Authentication-Results|Return-Path|Delivered-To|DomainKey-Signature|bh=|b=|h=|s=|v=1;|spf=|dkim=|dmarc=|smtp\.|header\.|cipher=|Message Hops|HOPTIME|FROMTOWITHRELAY)/i;
+const _STOP_SECTION_RE=/^(Original Message Details|Message Hops|Notification Details Sent by|Error Details Error:|HOPTIME)/i;
+
 function renderActivityDesc(desc){
   if(!desc) return '';
-  // Fix encoding artifacts from Salesforce/Windows-1252 export
   const text=desc
     .replace(/â€¢/g,'•').replace(/â€"/g,'–').replace(/â€œ/g,'"').replace(/â€"/g,'"')
     .replace(/Â·/g,'·').replace(/Ã©/g,'é').replace(/Â /g,' ').replace(/�/g,'')
@@ -2676,48 +2679,51 @@ function renderActivityDesc(desc){
 
   const lines=text.split('\n');
   let html='';
-  let inBody=false;
+  let stopped=false;
 
   lines.forEach(line=>{
+    if(stopped) return;
     const t=line.trim();
-    if(!t){html+='<div style="height:7px"></div>';inBody=false;return;}
 
-    // WhatsApp timestamp line
+    // Stop rendering at junk sections (Original Message Details, routing headers block)
+    if(_STOP_SECTION_RE.test(t)){stopped=true;return;}
+    // Skip individual technical header lines
+    if(_TECH_HEADER_RE.test(t)) return;
+    // Skip long base64/hash lines (>80 chars, no spaces)
+    if(t.length>80&&!/\s/.test(t)) return;
+
+    if(!t){html+='<div style="height:7px"></div>';return;}
+
     if(whatsappRe.test(t)){
       html+=`<div style="font-size:11px;color:#94a3b8;margin-top:10px;margin-bottom:2px;font-weight:500">${escHtml(t)}</div>`;
-      inBody=false;return;
+      return;
     }
-    // Email envelope headers (To/From/Subject etc)
     if(emailHeaderRe.test(t)){
       const colon=t.indexOf(':');
       const label=t.slice(0,colon);
       const val=t.slice(colon+1).trim();
-      html+=`<div style="display:flex;gap:8px;margin-bottom:3px;font-size:12px"><span style="font-weight:700;color:#64748b;min-width:58px;flex-shrink:0">${escHtml(label)}:</span><span style="color:#1e293b">${escHtml(val)}</span></div>`;
-      inBody=false;return;
-    }
-    // Body: label — start body section
-    if(bodyHeaderRe.test(t)){
-      const val=t.replace(bodyHeaderRe,'').trim();
-      html+=`<div style="margin-top:10px;padding-top:10px;border-top:1px solid #e2e8f0"></div>`;
-      if(val) html+=`<div style="font-size:12.5px;color:#374151;line-height:1.7;margin-bottom:3px">${escHtml(val)}</div>`;
-      inBody=true;return;
-    }
-    // Section header like "Baruch Notes:" or "Barak Notes:"
-    if(sectionHeaderRe.test(t)&&!emailHeaderRe.test(t)){
-      html+=`<div style="font-weight:700;color:#1e293b;font-size:12.5px;margin-top:12px;margin-bottom:4px;padding-bottom:3px;border-bottom:1px solid #f1f5f9">${escHtml(t)}</div>`;
-      inBody=false;return;
-    }
-    // Bullet point
-    if(bulletRe.test(t)){
-      const content=t.replace(bulletRe,'');
-      html+=`<div style="display:flex;gap:7px;margin:3px 0;padding-left:4px"><span style="color:#94a3b8;flex-shrink:0;margin-top:1px">•</span><span style="font-size:12.5px;color:#374151;line-height:1.6">${escHtml(content)}</span></div>`;
+      if(!val) return;
+      html+=`<div style="display:flex;gap:8px;margin-bottom:4px;font-size:12px"><span style="font-weight:700;color:#64748b;min-width:70px;flex-shrink:0">${escHtml(label)}:</span><span style="color:#1e293b;word-break:break-word">${escHtml(val)}</span></div>`;
       return;
     }
-    // Regular line
-    html+=`<div style="font-size:12.5px;color:#374151;line-height:1.7;margin-bottom:2px">${escHtml(t)}</div>`;
+    if(bodyHeaderRe.test(t)){
+      const val=t.replace(bodyHeaderRe,'').trim();
+      html+=`<div style="margin-top:10px;padding-top:10px;border-top:2px solid #e2e8f0;margin-bottom:8px"></div>`;
+      if(val) html+=`<div style="font-size:12.5px;color:#374151;line-height:1.7;word-break:break-word">${escHtml(val)}</div>`;
+      return;
+    }
+    if(sectionHeaderRe.test(t)&&!emailHeaderRe.test(t)){
+      html+=`<div style="font-weight:700;color:#1e293b;font-size:12.5px;margin-top:12px;margin-bottom:4px;padding-bottom:3px;border-bottom:1px solid #e2e8f0">${escHtml(t)}</div>`;
+      return;
+    }
+    if(bulletRe.test(t)){
+      html+=`<div style="display:flex;gap:7px;margin:3px 0;padding-left:4px"><span style="color:#94a3b8;flex-shrink:0">•</span><span style="font-size:12.5px;color:#374151;line-height:1.6;word-break:break-word">${escHtml(t.replace(bulletRe,''))}</span></div>`;
+      return;
+    }
+    html+=`<div style="font-size:12.5px;color:#374151;line-height:1.7;margin-bottom:2px;word-break:break-word">${escHtml(t)}</div>`;
   });
 
-  return `<div style="font-size:12.5px;line-height:1.7">${html}</div>`;
+  return `<div style="font-size:12.5px;line-height:1.7;overflow-wrap:break-word">${html}</div>`;
 }
 function initials(name){return(name||'').split(' ').filter(Boolean).map(w=>w[0]).join('').toUpperCase().slice(0,2)}
 function formatDate(d){if(!d) return '—';const[y,m,day]=d.split('-');const mo=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return`${mo[+m-1]} ${+day}, ${y}`}
