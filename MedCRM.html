@@ -2381,11 +2381,13 @@ const SF_ACT_MAP={
   'account name':'orgname','account':'orgname','company':'orgname','organization':'orgname','company / account':'orgname','company/account':'orgname',
   'type':'type','task type':'type','activity type':'type',
   'subject':'subject','task subject':'subject',
-  'comments':'description','full comments':'description','description':'description','notes':'description','body':'description','full body':'description',
-  'date':'date','activity date':'date','due date':'date','created date':'date','email date':'date',
+  'comments':'description','full comments':'description','description':'description','notes':'description','body':'description','full body':'description','task':'taskbody',
+  'date':'date','activity date':'date','due date':'date','email date':'date',
+  'created date':'createddate','created date/time':'createddate',
+  'completed date/time':'completeddate',
 };
 const ACT_CRM_FIELDS=['contactname','orgname','type','subject','description','date'];
-const ACT_CRM_LABELS={contactname:'Contact Name',orgname:'Account / Organization',type:'Activity Type (Call/Email)',subject:'Subject',description:'Comments / Description',date:'Date'};
+const ACT_CRM_LABELS={contactname:'Contact Name',orgname:'Account / Organization',type:'Activity Type (Call/Email)',subject:'Subject',description:'Comments / Description',date:'Activity Date'};
 
 function loadActivityFile(event){
   const file=event.target.files[0];
@@ -2588,8 +2590,16 @@ function doImportActivities(){
       contact={id:uid(),created:Date.now(),type:'staff',stage:'Active Contact',name:rec.contactname||rec.orgname,jobtitle:'',specialty:'',org:rec.contactname?rec.orgname:'',phone:'',email:'',location:'',referral:'',followup:'',notes:'',tags:['Imported from Salesforce']};
       contacts.push(contact);createdContacts++;
     }
-    const desc=[normalizeUnicodeChars(decodeHtmlEntities(rec.subject)),prettifyDescription(rec.description)].filter(Boolean).join('\n\n')||'(No description)';
-    activities.push({id:uid(),contactId:contact.id,type:normalizeActType(rec.type,rec.subject),date:normalizeActDate(rec.date),desc,created:Date.now(),source:'sf-import'});
+    // Use activity date; fall back to completed date then created date
+    const actDate=rec.date||(rec.completeddate&&rec.completeddate.slice(0,10))||rec.createddate||'';
+    // Merge subject + full comments + task body into description
+    const descParts=[
+      normalizeUnicodeChars(decodeHtmlEntities(rec.subject)),
+      prettifyDescription(rec.description),
+      rec.taskbody&&rec.taskbody.trim()&&rec.taskbody.trim()!==rec.description?.trim()?prettifyDescription(rec.taskbody):''
+    ].filter(Boolean);
+    const desc=descParts.join('\n\n')||'(No description)';
+    activities.push({id:uid(),contactId:contact.id,type:normalizeActType(rec.type,rec.subject),date:normalizeActDate(actDate),desc,created:Date.now(),source:'sf-import'});
     imported++;
   });
   saveAll();closeModal('import-activities-modal');render();
