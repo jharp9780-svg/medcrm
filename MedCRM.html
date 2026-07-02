@@ -2521,13 +2521,30 @@ function prettifyDescription(text){
 }
 // Prefer an exact name+org match, then name-only, then treat the row as an org-level
 // activity if Account Name matches a hospital-type contact (SF tasks logged on the Account, no Contact).
+// Strip medical titles/suffixes for fuzzy name matching
+function stripTitles(s){
+  return (s||'')
+    .replace(/\b(dr\.?|mr\.?|ms\.?|mrs\.?|prof\.?)\s*/gi,'')
+    .replace(/,?\s*(md|do|phd|dpm|dds|np|pa|aprn|rn|pa-c|facp|facs|facep|mbbs|mbchb|fccm|facg|facc|fccp|frcp|mph)\b\.?/gi,'')
+    .replace(/\s+/g,' ').trim().toLowerCase();
+}
+
 function findContactForActivity(nameVal,orgVal){
   const nameNorm=normalize(nameVal);
+  const nameStripped=stripTitles(nameVal);
   const orgNorm=normalize(orgVal);
   if(nameNorm){
+    // 1. Exact match with org
     let m=contacts.find(c=>normalize(c.name)===nameNorm&&orgNorm&&normalize(c.org)===orgNorm);
     if(m) return m;
+    // 2. Exact name match
     m=contacts.find(c=>normalize(c.name)===nameNorm);
+    if(m) return m;
+    // 3. Title-stripped match with org
+    m=contacts.find(c=>stripTitles(c.name)===nameStripped&&orgNorm&&normalize(c.org)===orgNorm);
+    if(m) return m;
+    // 4. Title-stripped name match
+    m=contacts.find(c=>stripTitles(c.name)===nameStripped);
     if(m) return m;
   }
   if(orgNorm){
