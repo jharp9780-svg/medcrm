@@ -2766,8 +2766,22 @@ function doImportActivities(){
     activities.push({id:uid(),contactId:contact.id,type:normalizeActType(rec.type,rec.subject),date:normalizeActDate(actDate),desc,created:Date.now(),source:'sf-import'});
     imported++;
   });
-  saveAll();closeModal('import-activities-modal');render();
-  toast(`✓ Imported ${imported} activities${createdContacts?`, created ${createdContacts} new contacts`:''}${skipped?`, skipped ${skipped}`:''}${legacyRemoved?`, removed ${legacyRemoved} from the earlier import`:''}.`);
+  saveContactsOnly();
+  closeModal('import-activities-modal');render();
+  const msg=`✓ Imported ${imported} activities${createdContacts?`, created ${createdContacts} new contacts`:''}${skipped?`, skipped ${skipped}`:''}${legacyRemoved?`, removed ${legacyRemoved} from the earlier import`:''}. Saving to database…`;
+  toast(msg);
+  // Write activities in batches of 500 to avoid Firebase 4MB write limit
+  (async function saveBatched(){
+    await _db.ref('activities').set([]);
+    const BATCH=500;
+    for(let i=0;i<activities.length;i+=BATCH){
+      const patch={};
+      activities.slice(i,i+BATCH).forEach((a,j)=>{patch[i+j]=a;});
+      await _db.ref('activities').update(patch);
+    }
+    invalidateCache();
+    toast(`✓ All ${activities.length} activities saved.`);
+  })();
 }
 
 // ══════════════════════════════════════════════
