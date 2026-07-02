@@ -2559,15 +2559,27 @@ function findContactForActivity(nameVal,orgVal){
 // Detects it generically by finding the largest tight burst of created-timestamps (a manual entry added
 // weeks apart won't fall inside a burst where thousands of rows were written within the same second or two).
 function nukeAllActivities(){
-  const n=activities.length;
-  if(!n){toast('No activities to delete.');return;}
-  if(!confirm(`Delete ALL ${n} activities? This cannot be undone.\n\nUse this when re-importing from Salesforce to ensure a completely clean slate.`)) return;
-  activities=[];
-  _db.ref('activities').set([]);
+  // Tagged SF imports are easy
+  const sfTagged=activities.filter(a=>a.source==='sf-import');
+  // Untagged: detect bulk imports by burst clustering (manual entries are created one at a time, minutes apart)
+  const untagged=activities.filter(a=>!a.source);
+  const sorted=[...untagged].sort((a,b)=>a.created-b.created);
+  const bulkIds=new Set();
+  for(let i=0;i<sorted.length;i++){
+    const prev=i>0?sorted[i].created-sorted[i-1].created:Infinity;
+    const next=i<sorted.length-1?sorted[i+1].created-sorted[i].created:Infinity;
+    if(Math.min(prev,next)<10000) bulkIds.add(sorted[i].id); // within 10s of a neighbor = bulk import
+  }
+  const totalDelete=sfTagged.length+bulkIds.size;
+  const manualKept=untagged.length-bulkIds.size;
+  if(!totalDelete){toast('No Salesforce activities found to remove.');return;}
+  if(!confirm(`Remove ${totalDelete} Salesforce activities?\n\n${manualKept} manually-logged activities will be kept.\n\nThis cannot be undone.`)) return;
+  activities=activities.filter(a=>a.source!=='sf-import'&&!bulkIds.has(a.id));
+  _db.ref('activities').set(activities.length?activities:[]);
   invalidateCache();
   render();
   closeModal('import-activities-modal');
-  toast(`✓ Wiped all ${n} activities. Now re-import your Salesforce files.`);
+  toast(`✓ Removed ${totalDelete} SF activities. ${manualKept} manual activities preserved.`);
 }
 function cleanupUntaggedBulkImport(){
   const untagged=activities.filter(a=>!a.source);
