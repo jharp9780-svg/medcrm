@@ -2557,7 +2557,14 @@ function reflowScheduleTable(text){
 function prettifyDescription(text){
   if(!text) return text;
   text=normalizeUnicodeChars(decodeHtmlEntities(text));
+  // Break before email envelope headers
   text=text.replace(/\s*(To:|CC:|BCC:|Attachment:|Subject:|Body:|From:|Sent:)\s*/g,'\n$1 ');
+  // Break before quoted reply separators ("On Mon, Jan 1, 2026 at ... wrote:", "On Sun, Jan 18, 2026 at 12:53PM Barak Klammer")
+  text=text.replace(/(On\s+(?:Sun|Mon|Tue|Wed|Thu|Fri|Sat),?\s+\w+\s+\d{1,2},?\s+\d{4})/g,'\n\n$1');
+  // Fix missing spaces at lowercase→uppercase word joins (e.g. "sorryI" → "sorry I", "weekBest" → "week Best")
+  text=text.replace(/([a-z])([A-Z])/g,'$1 $2');
+  // Break before common email closings if they run together with preceding text
+  text=text.replace(/([^\n])(Best(?:\s+[Rr]egards)?|Thanks|Sincerely|Regards|Cheers|Best wishes)([,\s])/g,'$1\n\n$2$3');
   text=reflowScheduleTable(text);
   return text.replace(/^\n+/,'').trim();
 }
