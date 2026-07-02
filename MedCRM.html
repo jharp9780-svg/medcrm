@@ -2578,10 +2578,16 @@ function doImportActivities(){
   }
   let imported=0,skipped=0,createdContacts=0;
   _actCsvData.forEach(row=>{
-    const rec={contactname:'',orgname:'',type:'',subject:'',description:'',date:''};
+    const rec={contactname:'',orgname:'',type:'',subject:'',description:'',date:'',createddate:'',completeddate:'',taskbody:''};
     Object.entries(mapping).forEach(([i,field])=>{
       const val=(row[+i]||'').trim();
-      if(val) rec[field]=val;
+      if(!val) return;
+      if(field==='description'||field==='taskbody'){
+        // Merge multiple description-type columns; skip if duplicate content
+        rec[field]=rec[field]&&rec[field]!==val?rec[field]+'\n\n'+val:val;
+      } else {
+        rec[field]=val;
+      }
     });
     if(!rec.contactname&&!rec.orgname){skipped++;return;}
     let contact=findContactForActivity(rec.contactname,rec.orgname);
