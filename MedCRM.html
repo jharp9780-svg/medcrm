@@ -2859,14 +2859,23 @@ function renderActivityDesc(desc){
   text=text.replace(/([a-z]):([A-Za-z])/g,'$1: $2');
   // Fix missing spaces at lowercase→uppercase joins (e.g. "sorryI" → "sorry I")
   text=text.replace(/([a-z])([A-Z])/g,'$1 $2');
-  // Fix missing spaces after sentence-ending punctuation before capital (e.g. "credential.Do" → "credential. Do")
+  // Fix missing spaces after sentence-ending punctuation before capital
   text=text.replace(/([.!])([A-Z])/g,'$1 $2');
   // Break before quoted reply headers ("On Mon, Jan 1..." style)
   text=text.replace(/(On\s+(?:Sun|Mon|Tue|Wed|Thu|Fri|Sat),?\s+\w+\s+\d{1,2},?\s+\d{4})/g,'\n\n$1');
   // Break before email envelope headers that got concatenated
   text=text.replace(/\s*(To:|From:|CC:|BCC:|Subject:|Sent:|Attachment:)/g,'\n$1');
-  // Break before common closings run into body text
+  // Break before common closings
   text=text.replace(/([^\n])\n?(Best(?:\s+[Rr]egards)?|Thanks|Sincerely|Regards|Cheers|Best wishes),/g,'$1\n\n$2,');
+  // Add paragraph breaks before common sentence-starting words after a period
+  text=text.replace(/\.\s+(Please|We |I |The |There |It |You |Have |Thank|As |In |Our |Your |This |If |At |After |While |During |Health|Remote|Note:|Please )/g,'.\n\n$1');
+  // Break before signature lines: phone numbers, standalone email addresses
+  text=text.replace(/\s+(Phone|Fax|Cell|Mobile|Tel)[\s:]+(\d)/gi,'\nPhone: $2');
+  text=text.replace(/\s+([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})(\s|$)/g,'\n$1\n');
+  // Break before address lines (number followed by street name)
+  text=text.replace(/\s+(\d{3,5}\s+[A-Z][a-z]+\s+(?:Street|St|Avenue|Ave|Boulevard|Blvd|Road|Rd|Drive|Dr|Lane|Ln))/g,'\n$1');
+  // Collapse excess blank lines
+  text=text.replace(/\n{3,}/g,'\n\n');
   if(!text) return '';
 
   const emailHeaderRe=/^(To|From|CC|BCC|Subject|Sent|Attachment):\s*/i;
