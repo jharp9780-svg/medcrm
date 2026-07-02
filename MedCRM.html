@@ -2850,8 +2850,8 @@ function renderActivityDesc(desc){
     .trim();
   // Convert ' ? ' used as a list separator in meeting/call notes into bullet points
   // (3+ occurrences = it's a separator pattern, not real question marks)
-  const _qSepCount=(text.match(/ \? /g)||[]).length;
-  if(_qSepCount>=3) text=text.replace(/ \? /g,'\n• ');
+  const _qSepCount=(text.match(/\s\?\s/g)||[]).length;
+  if(_qSepCount>=3) text=text.replace(/\s\?\s/g,'\n• ');
   // Fix corrupted apostrophes: curly quotes mangled to '?' between letters (e.g. "I?m" → "I'm", "don?t" → "don't")
   text=text.replace(/([a-zA-Z])\?([a-zA-Z])/g,"$1'$2");
   // Fix corrupted '?' stuck to time ("12:53?" → "12:53") or before AM/PM
