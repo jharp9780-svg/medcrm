@@ -624,6 +624,7 @@ Referred by Dr. Marcus Lee" oninput="runSmartParse()"></textarea>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 
 <script>
 // ══════════════════════════════════════════════
@@ -705,8 +706,9 @@ const FIREBASE_CONFIG = {
   appId: "1:460561430771:web:6276f92f04d0592e545f86"
 };
 firebase.initializeApp(FIREBASE_CONFIG);
-const _auth = firebase.auth();
-const _db   = firebase.database();
+const _auth    = firebase.auth();
+const _db      = firebase.database();
+const _storage = firebase.storage();
 
 let contacts=[], activities=[], documents=[];
 let _dupCache=null;
@@ -2131,17 +2133,21 @@ function handleDocDrop(event,contactId){
   Array.from(files).forEach(file=>attachSingleFile(file,contactId));
 }
 function attachSingleFile(file,contactId){
-  if(file.size>10*1024*1024){toast('File too large (max 10 MB): '+file.name);return;}
-  const reader=new FileReader();
-  reader.onload=e=>{
-    const doc={id:uid(),contactId,name:file.name,size:file.size,type:file.type,data:e.target.result,created:Date.now()};
+  const docId=uid();
+  const storageRef=_storage.ref('documents/'+contactId+'/'+docId+'_'+file.name);
+  toast('⏳ Uploading '+file.name+'…');
+  storageRef.put(file).then(snap=>snap.ref.getDownloadURL()).then(url=>{
+    const doc={id:docId,contactId,name:file.name,size:file.size,type:file.type,url,created:Date.now()};
     documents.push(doc);
-    _db.ref('documents/'+(documents.length-1)).set(doc);buildDetailBody(contactId);toast('📎 '+file.name+' attached.');
-  };
-  reader.readAsDataURL(file);
+    _db.ref('documents/'+(documents.length-1)).set(doc);
+    buildDetailBody(contactId);
+    toast('📎 '+file.name+' attached.');
+  }).catch(err=>{toast('Upload failed: '+err.message);});
 }
 function downloadDoc(id){
   const d=documents.find(x=>x.id===id);if(!d) return;
+  if(d.url){window.open(d.url,'_blank');return;}
+  // backward compat: base64 data
   const a=document.createElement('a');a.href=d.data;a.download=d.name;a.click();
 }
 function deleteDoc(id){
