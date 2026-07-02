@@ -570,8 +570,9 @@ Referred by Dr. Marcus Lee" oninput="runSmartParse()"></textarea>
         </div>
       </div>
     </div>
-    <div class="modal-footer">
+    <div class="modal-footer" style="flex-wrap:wrap;gap:8px">
       <button class="btn btn-secondary" onclick="closeModal('import-activities-modal')">Cancel</button>
+      <button class="btn btn-danger btn-sm" onclick="nukeAllActivities()" style="margin-right:auto">🗑 Wipe ALL activities (fresh start)</button>
       <button class="btn btn-success" id="do-import-activities-btn" onclick="doImportActivities()" style="display:none">✓ Import Activities</button>
     </div>
   </div>
@@ -2557,6 +2558,17 @@ function findContactForActivity(nameVal,orgVal){
 // One-time cleanup for a bulk import that ran before activities were tagged with source:'sf-import'.
 // Detects it generically by finding the largest tight burst of created-timestamps (a manual entry added
 // weeks apart won't fall inside a burst where thousands of rows were written within the same second or two).
+function nukeAllActivities(){
+  const n=activities.length;
+  if(!n){toast('No activities to delete.');return;}
+  if(!confirm(`Delete ALL ${n} activities? This cannot be undone.\n\nUse this when re-importing from Salesforce to ensure a completely clean slate.`)) return;
+  activities=[];
+  _db.ref('activities').set([]);
+  invalidateCache();
+  render();
+  closeModal('import-activities-modal');
+  toast(`✓ Wiped all ${n} activities. Now re-import your Salesforce files.`);
+}
 function cleanupUntaggedBulkImport(){
   const untagged=activities.filter(a=>!a.source);
   if(untagged.length<20) return 0;
