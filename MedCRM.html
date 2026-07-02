@@ -277,6 +277,9 @@ textarea{resize:vertical;min-height:80px}
       <div class="nav-item" onclick="openModal('import-activities-modal')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Import Calls/Emails
       </div>
+      <div class="nav-item" onclick="openModal('import-whatsapp-modal')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Import WhatsApp Chat
+      </div>
     </div>
     <div style="padding:12px 16px;margin-top:auto;border-top:1px solid #334155">
       <div style="font-size:11px;color:#94a3b8;margin-bottom:8px" id="sidebar-user-email"></div>
@@ -437,6 +440,7 @@ Referred by Dr. Marcus Lee" oninput="runSmartParse()"></textarea>
         <select id="act-type">
           <option value="teams">💻 Microsoft Teams Meeting</option>
           <option value="call">📞 Phone Call</option>
+          <option value="whatsapp">💬 WhatsApp</option>
           <option value="email">✉️ Email</option>
           <option value="meeting">🤝 In-Person Meeting</option>
           <option value="note">📝 Note</option>
@@ -533,6 +537,42 @@ Referred by Dr. Marcus Lee" oninput="runSmartParse()"></textarea>
   </div>
 </div>
 
+<!-- ═══════════ IMPORT WHATSAPP CHAT MODAL ═══════════ -->
+<div id="import-whatsapp-modal" class="modal-overlay hidden">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <div class="modal-title">💬 Import WhatsApp Chat</div>
+      <button class="close-btn" onclick="closeModal('import-whatsapp-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="import-step">
+        <div class="import-step-title">How to export from WhatsApp</div>
+        <div style="font-size:12.5px;color:#374151;line-height:1.7">
+          1. Open the WhatsApp conversation on your phone<br>
+          2. Tap the contact name at the top → <strong>Export Chat</strong><br>
+          3. Choose <strong>Without Media</strong> → send the .txt file to yourself<br>
+          4. Upload it below
+        </div>
+      </div>
+      <div class="import-step">
+        <div class="import-step-title">Contact this chat belongs to</div>
+        <input id="wa-contact-search" type="text" placeholder="Type a name to search..." style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;margin-bottom:6px" oninput="searchWaContact(this.value)">
+        <div id="wa-contact-results" style="border:1px solid var(--border);border-radius:6px;max-height:160px;overflow-y:auto;display:none"></div>
+        <div id="wa-contact-selected" style="font-size:13px;font-weight:600;color:var(--blue);margin-top:4px"></div>
+      </div>
+      <div class="import-step">
+        <div class="import-step-title">Upload .txt file</div>
+        <input type="file" id="wa-file-input" accept=".txt" onchange="loadWaFile(event)" style="font-size:13px">
+        <div id="wa-file-status" style="font-size:12px;color:var(--gray);margin-top:6px"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('import-whatsapp-modal')">Cancel</button>
+      <button class="btn btn-success" id="do-import-wa-btn" onclick="doImportWhatsApp()" style="display:none">💬 Import Chat</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══════════ IMPORT ACTIVITIES (SALESFORCE CALLS/EMAILS) MODAL ═══════════ -->
 <div id="import-activities-modal" class="modal-overlay hidden">
   <div class="modal" style="max-width:700px">
@@ -596,8 +636,8 @@ const STAFF_STAGES=['Active Contact','Reached Out','Met','Not Responsive','Not I
 const STAGES=[...new Set([...DOCTOR_STAGES,...HOSPITAL_STAGES,...STAFF_STAGES])];
 const STAGE_COLORS={'Prospect':'badge-gray','Reached Out':'badge-blue','Intro Call Done':'badge-blue','Contract Sent':'badge-purple','Contract Signed':'badge-amber','Client Interview':'badge-amber','Meeting Scheduled':'badge-purple','Proposal Sent':'badge-amber','Negotiating':'badge-amber','Offer Made':'badge-amber','Application Sent':'badge-purple','Interviewing':'badge-purple','Hired':'badge-green','Not Interested':'badge-red','Active Contact':'badge-blue','Met':'badge-purple','Not Responsive':'badge-gray'};
 function stagesFor(type){return type==='hospital'?HOSPITAL_STAGES:type==='staff'?STAFF_STAGES:DOCTOR_STAGES;}
-const ACT_ICONS={call:'📞',email:'✉️',meeting:'🤝',teams:'💻',note:'📝',doc:'📎'};
-const ACT_CLASSES={call:'act-call',email:'act-email',meeting:'act-meeting',teams:'act-meeting',note:'act-note',doc:'act-doc'};
+const ACT_ICONS={call:'📞',email:'✉️',meeting:'🤝',teams:'💻',note:'📝',doc:'📎',whatsapp:'💬'};
+const ACT_CLASSES={call:'act-call',email:'act-email',meeting:'act-meeting',teams:'act-meeting',note:'act-note',doc:'act-doc',whatsapp:'act-call'};
 // Specialties: [name, color-class, emoji, description]
 const SPECIALTIES_DEF=[
   // Critical / Hospital-based (most relevant to RICU)
@@ -2476,7 +2516,8 @@ function normalizeActType(val,subject){
   // Type field is often blank in Salesforce exports — fall back to keywords in the Subject line.
   const s=(subject||'').toLowerCase();
   if(s.includes('email')) return 'email';
-  if(s.includes('call')||s.includes('whatsapp')) return 'call';
+  if(v.includes('whatsapp')||s.includes('whatsapp')) return 'whatsapp';
+  if(s.includes('call')) return 'call';
   if(s.includes('meeting')) return 'meeting';
   return 'note';
 }
@@ -2558,6 +2599,82 @@ function findContactForActivity(nameVal,orgVal){
 // One-time cleanup for a bulk import that ran before activities were tagged with source:'sf-import'.
 // Detects it generically by finding the largest tight burst of created-timestamps (a manual entry added
 // weeks apart won't fall inside a burst where thousands of rows were written within the same second or two).
+// ══════════════════════════════════════════════
+// WHATSAPP CHAT IMPORTER
+// ══════════════════════════════════════════════
+let _waContactId=null,_waChatText='';
+
+function searchWaContact(q){
+  const el=document.getElementById('wa-contact-results');
+  if(!q||q.length<2){el.style.display='none';return;}
+  const norm=q.toLowerCase();
+  const matches=contacts.filter(c=>(c.name||'').toLowerCase().includes(norm)).slice(0,8);
+  if(!matches.length){el.style.display='none';return;}
+  el.style.display='block';
+  el.innerHTML=matches.map(c=>`<div style="padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid #f1f5f9" onmousedown="selectWaContact('${c.id}','${escHtml(c.name)}')">${escHtml(c.name)}${c.org?`<span style="color:var(--gray);font-size:11px"> · ${escHtml(c.org)}</span>`:''}</div>`).join('');
+}
+
+function selectWaContact(id,name){
+  _waContactId=id;
+  document.getElementById('wa-contact-search').value=name;
+  document.getElementById('wa-contact-results').style.display='none';
+  document.getElementById('wa-contact-selected').textContent='✓ '+name;
+  if(_waChatText) document.getElementById('do-import-wa-btn').style.display='';
+}
+
+function loadWaFile(e){
+  const file=e.target.files[0];
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    _waChatText=ev.target.result;
+    const lines=_waChatText.split('\n').filter(l=>l.trim()).length;
+    document.getElementById('wa-file-status').textContent=`✓ Loaded ${lines} lines from ${file.name}`;
+    if(_waContactId) document.getElementById('do-import-wa-btn').style.display='';
+  };
+  reader.readAsText(file,'UTF-8');
+}
+
+function doImportWhatsApp(){
+  if(!_waContactId||!_waChatText){toast('Select a contact and upload a file first.');return;}
+  // Parse WhatsApp export format: "M/D/YY, H:MM AM/PM - Name: message"
+  const lineRe=/^(\d{1,2}\/\d{1,2}\/\d{2,4}),?\s+(\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM)?)\s*[-–]\s*(.+?):\s*([\s\S]*?)(?=^\d{1,2}\/\d{1,2}\/\d{2,4},?\s+\d{1,2}:\d{2}|\Z)/gim;
+  // Group messages by date into one activity per day
+  const byDate={};
+  const lines=_waChatText.split('\n');
+  let curDate='',curBlock='';
+  lines.forEach(line=>{
+    const m=line.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4}),?\s+(\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM)?)\s*[-–]\s*(.+?):\s*(.*)/i);
+    if(m){
+      const mo=m[1].padStart(2,'0'),dy=m[2].padStart(2,'0');
+      let yr=m[3];if(yr.length===2) yr='20'+yr;
+      const dateKey=`${yr}-${mo}-${dy}`;
+      const time=m[4],sender=m[5],msg=m[6];
+      if(dateKey!==curDate){
+        if(curDate&&curBlock) byDate[curDate]=(byDate[curDate]||'')+curBlock;
+        curDate=dateKey;curBlock='';
+      }
+      curBlock+=`[${time}] ${sender}: ${msg}\n`;
+    } else if(curDate&&line.trim()&&!line.match(/^(Messages and calls|This message was deleted|image omitted|video omitted|audio omitted|document omitted|sticker omitted|GIF omitted)/i)){
+      curBlock+='  '+line.trim()+'\n';
+    }
+  });
+  if(curDate&&curBlock) byDate[curDate]=(byDate[curDate]||'')+curBlock;
+  const dates=Object.keys(byDate).sort();
+  if(!dates.length){toast('No messages found in this file. Make sure it is a WhatsApp .txt export.');return;}
+  dates.forEach(date=>{
+    activities.push({id:uid(),contactId:_waContactId,type:'whatsapp',date,desc:byDate[date].trim(),created:Date.now(),source:'whatsapp-import'});
+  });
+  saveAll();render();
+  closeModal('import-whatsapp-modal');
+  _waContactId=null;_waChatText='';
+  document.getElementById('wa-file-input').value='';
+  document.getElementById('wa-contact-search').value='';
+  document.getElementById('wa-contact-selected').textContent='';
+  document.getElementById('do-import-wa-btn').style.display='none';
+  toast(`✓ Imported ${dates.length} days of WhatsApp messages.`);
+}
+
 function nukeAllActivities(){
   // Tagged SF imports are easy
   const sfTagged=activities.filter(a=>a.source==='sf-import');
