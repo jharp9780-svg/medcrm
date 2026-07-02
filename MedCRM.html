@@ -2848,10 +2848,19 @@ function renderActivityDesc(desc){
     .replace(/\r\n/g,'\n').replace(/\r/g,'\n')
     .replace(/\n{3,}/g,'\n\n')
     .trim();
+  // Fix corrupted apostrophes: curly quotes mangled to '?' between letters (e.g. "I?m" → "I'm", "don?t" → "don't")
+  text=text.replace(/([a-zA-Z])\?([a-zA-Z])/g,"$1'$2");
+  // Fix corrupted '?' stuck to time ("12:53?" → "12:53") or before AM/PM
+  text=text.replace(/(\d{1,2}:\d{2})\?(\s*(?:AM|PM))/gi,'$1 $2');
+  text=text.replace(/(\d{1,2}:\d{2})\?(?=\s)/g,'$1');
+  // Fix missing space after comma: "Best,Natasha" → "Best, Natasha"
+  text=text.replace(/,([A-Za-z])/g,', $1');
+  // Fix missing space after colon in body text (not email headers): "wrote:Hi" → "wrote: Hi"
+  text=text.replace(/([a-z]):([A-Za-z])/g,'$1: $2');
   // Fix missing spaces at lowercase→uppercase joins (e.g. "sorryI" → "sorry I")
   text=text.replace(/([a-z])([A-Z])/g,'$1 $2');
   // Fix missing spaces after sentence-ending punctuation before capital (e.g. "credential.Do" → "credential. Do")
-  text=text.replace(/([.!?])([A-Z])/g,'$1 $2');
+  text=text.replace(/([.!])([A-Z])/g,'$1 $2');
   // Break before quoted reply headers ("On Mon, Jan 1..." style)
   text=text.replace(/(On\s+(?:Sun|Mon|Tue|Wed|Thu|Fri|Sat),?\s+\w+\s+\d{1,2},?\s+\d{4})/g,'\n\n$1');
   // Break before email envelope headers that got concatenated
