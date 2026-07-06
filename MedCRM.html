@@ -3245,11 +3245,7 @@ function loadEmailsFromFirebase(){
     return _emailsCache;
   });
 }
-// invalidate cache when new emails arrive
-_db.ref('emails').on('value',snap=>{
-  const val=snap.val();
-  _emailsCache=val?Object.values(val):[];
-});
+// Email cache is loaded on demand only — no real-time listener (too large)
 
 let _lushaPending=[];
 let _docDomainFilter='';
