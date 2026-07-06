@@ -3459,7 +3459,7 @@ function openEmailModal(contactId, idx){
       ${em.body
         ? `<iframe id="email-iframe" sandbox="allow-same-origin" style="width:100%;border:none;min-height:400px;display:block" srcdoc="${em.body.replace(/"/g,'&quot;').replace(/'/g,'&#39;')}" onload="(function(f){try{f.style.height=f.contentDocument.body.scrollHeight+32+'px'}catch(e){}})(this)"></iframe>`
         : (formatted
-            ? `<div style="font-size:13px;color:#1e293b;line-height:1.7;white-space:pre-wrap;font-family:inherit">${escHtml(formatted)}</div><div style="margin-top:16px;padding:10px 12px;background:#fefce8;border:1px solid #fde68a;border-radius:6px;font-size:11px;color:#92400e">⚠️ Only a 255-character preview is stored. To see full emails here, update your Power Automate flow to also send the <b>body</b> field (see instructions in Settings).</div>`
+            ? `<div style="font-size:13px;color:#1e293b;line-height:1.7;white-space:pre-wrap;font-family:inherit">${escHtml(formatted)}</div>`
             : '<div style="color:#94a3b8;font-size:12px;font-style:italic">No body content stored.</div>'
           )
       }
