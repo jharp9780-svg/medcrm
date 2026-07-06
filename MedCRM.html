@@ -1913,7 +1913,7 @@ function renderDocsTab(docs,id){
     <div id="drop-zone-${id}" ondragover="event.preventDefault();this.style.background='#eff6ff';this.style.borderColor='#2563eb'" ondragleave="this.style.background='#f8fafc';this.style.borderColor='#cbd5e1'" ondrop="handleDocDrop(event,'${id}')" style="border:2px dashed #cbd5e1;border-radius:8px;padding:18px 12px;text-align:center;background:#f8fafc;margin-bottom:10px;transition:all .15s;cursor:pointer" onclick="document.getElementById('file-input-${id}').click()">
       <div style="font-size:22px;margin-bottom:4px">📎</div>
       <div style="font-size:12px;color:#64748b">Drop files here or <span style="color:#2563eb;font-weight:600">click to browse</span></div>
-      <input type="file" id="file-input-${id}" style="display:none" multiple onchange="attachFile(event,'${id}')">
+      <input type="file" id="file-input-${id}" style="display:none" multiple accept="*/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.rtf,.odt,.ods,.odp,.png,.jpg,.jpeg,.gif,.mp4,.mov,.zip" onchange="attachFile(event,'${id}')">
     </div>
   </div>
     <div>${docs.length?docs.map(d=>`<div class="doc-item">
@@ -2142,7 +2142,10 @@ function attachSingleFile(file,contactId){
     _db.ref('documents/'+(documents.length-1)).set(doc);
     buildDetailBody(contactId);
     toast('📎 '+file.name+' attached.');
-  }).catch(err=>{toast('Upload failed: '+err.message);});
+  }).catch(err=>{
+    console.error('Upload failed:',err);
+    alert('Upload failed for "'+file.name+'".\n\n'+err.message+'\n\nCheck Firebase Storage rules allow all file types.');
+  });
 }
 function downloadDoc(id){
   const d=documents.find(x=>x.id===id);if(!d) return;
@@ -3380,14 +3383,16 @@ function renderEmailsTab(contact,id){
       listEl.innerHTML=`<div style="text-align:center;padding:24px"><div style="font-size:28px;margin-bottom:8px">📭</div><div style="color:var(--gray);font-size:12px">No synced emails yet.<br>Emails will appear here after Power Automate captures them.</div></div>`;
       return;
     }
+    // Store emails on window so the modal can access them
+    window._emailCache = window._emailCache || {};
+    window._emailCache[id] = items;
     listEl.innerHTML=items.map((e,i)=>{
       const subject=e.subject||'(no subject)';
       const received=e.received?new Date(e.received).toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}):'';
       const from=e.from||'';
       const preview=e.preview||'';
       const isSent=e.direction==='sent';
-      const eid='email-expand-'+id+'-'+i;
-      return `<div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:12px 14px;cursor:pointer" onclick="const el=document.getElementById('${eid}');el.style.display=el.style.display==='none'?'block':'none'">
+      return `<div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:12px 14px;cursor:pointer;transition:background .15s" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='#f8fafc'" onclick="openEmailModal('${id}',${i})">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
           <div style="font-size:12px;font-weight:600;color:#1e293b">${escHtml(subject)}</div>
           <div style="display:flex;align-items:center;gap:6px;white-space:nowrap;margin-left:8px">
@@ -3396,14 +3401,72 @@ function renderEmailsTab(contact,id){
           </div>
         </div>
         <div style="font-size:11px;color:var(--blue);margin-bottom:4px">${escHtml(from)}</div>
-        ${preview?`<div style="font-size:11px;color:var(--gray);line-height:1.4">${escHtml(preview.substring(0,120))}${preview.length>120?'…':''}</div>`:''}
-        <div id="${eid}" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:12px;color:#334155;white-space:pre-wrap;line-height:1.6">${escHtml(preview)}</div>
+        ${preview?`<div style="font-size:11px;color:var(--gray);line-height:1.4">${escHtml(preview.substring(0,140))}${preview.length>140?'…':''}</div>`:''}
       </div>`;
     }).join('');
   }).catch(()=>{
     const listEl=document.getElementById('emails-list-'+id);
     if(listEl) listEl.innerHTML=`<div style="text-align:center;padding:24px;color:var(--gray);font-size:12px">Error loading emails. Please refresh.</div>`;
   });
+}
+function openEmailModal(contactId, idx){
+  const e = (window._emailCache&&window._emailCache[contactId])||[];
+  const em = e[idx];
+  if(!em) return;
+  const subject = em.subject||'(no subject)';
+  const received = em.received ? new Date(em.received).toLocaleString('en-US',{weekday:'short',month:'long',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}) : '';
+  const from = em.from||'';
+  const to = em.to||'';
+  const body = em.body || em.preview || '';
+  const isSent = em.direction==='sent';
+  const outlookSearch = 'https://outlook.office.com/mail/search/query/'+encodeURIComponent(subject);
+  // Format body same as activity descriptions
+  let formatted = body
+    .replace(/([a-zA-Z])\?([a-zA-Z])/g,"$1'$2")
+    .replace(/,([A-Za-z])/g,', $1')
+    .replace(/([a-z]):([A-Za-z])/g,'$1: $2')
+    .replace(/([a-z])([A-Z])/g,'$1 $2')
+    .replace(/([.!])([A-Z])/g,'$1 $2')
+    .replace(/(On\s+(?:Sun|Mon|Tue|Wed|Thu|Fri|Sat),?\s+\w+\s+\d{1,2},?\s+\d{4})/g,'\n\n$1')
+    .replace(/\s*(To:|From:|CC:|BCC:|Subject:|Sent:)/g,'\n$1')
+    .replace(/([^\n])\n?(Best(?:\s+[Rr]egards)?|Thanks|Sincerely|Regards|Cheers|Best wishes),/g,'$1\n\n$2,')
+    .replace(/\n{3,}/g,'\n\n').trim();
+  // Remove existing modal if any
+  const old = document.getElementById('email-view-modal');
+  if(old) old.remove();
+  const modal = document.createElement('div');
+  modal.id = 'email-view-modal';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);display:flex;align-items:flex-start;justify-content:center;padding:40px 20px;overflow:auto';
+  modal.innerHTML = `<div style="background:#fff;border-radius:12px;width:100%;max-width:720px;box-shadow:0 20px 60px rgba(0,0,0,.25);display:flex;flex-direction:column;max-height:calc(100vh - 80px)">
+    <div style="padding:18px 20px 14px;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-shrink:0">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:15px;font-weight:700;color:#1e293b;margin-bottom:6px;line-height:1.3">${escHtml(subject)}</div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          ${isSent?'<span style="font-size:10px;background:#dbeafe;color:#1d4ed8;border-radius:4px;padding:2px 7px;font-weight:700">SENT</span>':'<span style="font-size:10px;background:#dcfce7;color:#166534;border-radius:4px;padding:2px 7px;font-weight:700">RECEIVED</span>'}
+          <span style="font-size:11px;color:#64748b">${escHtml(received)}</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-shrink:0;align-items:center">
+        <a href="${outlookSearch}" target="_blank" style="font-size:11px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:5px 10px;color:#475569;text-decoration:none;white-space:nowrap" title="Search for this email in Outlook Web">🔍 Open in Outlook</a>
+        <button onclick="document.getElementById('email-view-modal').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#94a3b8;line-height:1;padding:2px 4px">×</button>
+      </div>
+    </div>
+    <div style="padding:14px 20px;border-bottom:1px solid #f1f5f9;flex-shrink:0">
+      <div style="font-size:11px;color:#64748b;margin-bottom:3px"><b style="color:#475569">From:</b> ${escHtml(from)}</div>
+      <div style="font-size:11px;color:#64748b"><b style="color:#475569">To:</b> ${escHtml(to)}</div>
+    </div>
+    <div style="padding:20px;overflow-y:auto;flex:1" id="email-modal-body-area">
+      ${em.body
+        ? `<iframe id="email-iframe" sandbox="allow-same-origin" style="width:100%;border:none;min-height:400px;display:block" srcdoc="${em.body.replace(/"/g,'&quot;').replace(/'/g,'&#39;')}" onload="(function(f){try{f.style.height=f.contentDocument.body.scrollHeight+32+'px'}catch(e){}})(this)"></iframe>`
+        : (formatted
+            ? `<div style="font-size:13px;color:#1e293b;line-height:1.7;white-space:pre-wrap;font-family:inherit">${escHtml(formatted)}</div><div style="margin-top:16px;padding:10px 12px;background:#fefce8;border:1px solid #fde68a;border-radius:6px;font-size:11px;color:#92400e">⚠️ Only a 255-character preview is stored. To see full emails here, update your Power Automate flow to also send the <b>body</b> field (see instructions in Settings).</div>`
+            : '<div style="color:#94a3b8;font-size:12px;font-style:italic">No body content stored.</div>'
+          )
+      }
+    </div>
+  </div>`;
+  modal.addEventListener('click', ev => { if(ev.target===modal) modal.remove(); });
+  document.body.appendChild(modal);
 }
 function injectOutlookBtn(){}
 
