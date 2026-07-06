@@ -3415,35 +3415,43 @@ function openEmailModal(contactId, idx){
   if(!em) return;
   const subject = em.subject||'(no subject)';
   const received = em.received ? new Date(em.received).toLocaleString('en-US',{weekday:'short',month:'long',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}) : '';
-  // Clean up Exchange internal DN format like /O=EXCHANGELABS/.../CN=firstname-lastname
   function cleanAddr(addr){
     if(!addr) return '';
-    if(addr.startsWith('/O=')||addr.startsWith('/o=')){
-      const cn=addr.match(/CN=([^/\r\n]+)$/i);
-      if(cn) return cn[1].replace(/-/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+    if(/^\/O=/i.test(addr)){
+      // Extract last meaningful CN segment, skip GUIDs
+      const parts = addr.split('/').filter(p=>/^CN=/i.test(p)).map(p=>p.replace(/^CN=/i,''));
+      const readable = parts.filter(p=>!/^[0-9A-F]{8,}/i.test(p));
+      if(readable.length) return readable[readable.length-1].replace(/-/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+      if(parts.length) return parts[parts.length-1].split('-').pop().replace(/\b\w/g,c=>c.toUpperCase());
       return 'Internal Sender';
     }
     return addr;
   }
   const from = cleanAddr(em.from||'');
-  const to = (em.to||'').split(';').map(a=>cleanAddr(a.trim())).filter(Boolean).join(', ');
+  const to = (em.to||'').split(/[;,]/).map(a=>cleanAddr(a.trim())).filter(Boolean).join(', ');
   const rawBody = em.body || em.preview || '';
   const isSent = em.direction==='sent';
   const outlookSearch = 'https://outlook.office.com/mail/search/query/'+encodeURIComponent(subject);
-  // Format body same as activity descriptions
-  let formatted = rawBody
-    .replace(/([a-zA-Z])\?([a-zA-Z])/g,"$1'$2")
-    .replace(/,([A-Za-z])/g,', $1')
-    .replace(/([a-z]):([A-Za-z])/g,'$1: $2')
-    .replace(/(On\s+(?:Sun|Mon|Tue|Wed|Thu|Fri|Sat),?\s+\w+\s+\d{1,2},?\s+\d{4})/g,'\n\n$1')
-    .replace(/\s*(To:|From:|CC:|BCC:|Subject:|Sent:)/g,'\n$1')
-    .replace(/([^\n])\n?(Best(?:\s+[Rr]egards)?|Thanks|Sincerely|Regards|Cheers|Best wishes),/g,'$1\n\n$2,')
-    // Break before date patterns like 09/03/2026
-    .replace(/\s(\d{2}\/\d{2}\/\d{4})/g,'\n$1')
-    // Break long runs of space-separated tokens into rows
-    .replace(/(\d{2}\/\d{2}\/\d{4}\s+\d{2}\/\d{2}\/\d{4})/g,'\n$1')
-    .replace(/\n{3,}/g,'\n\n').trim();
-  // Remove existing modal if any
+  // Detect HTML vs plain text
+  const isHtml = /<html|<body|<div|<p|<br/i.test(rawBody);
+  // Format plain text body
+  function formatEmailBody(text){
+    if(!text) return '';
+    return text
+      .replace(/([a-zA-Z])\?([a-zA-Z])/g,"$1'$2")
+      .replace(/\r\n/g,'\n')
+      .replace(/\r/g,'\n')
+      // Break before email headers
+      .replace(/\s*(From:|To:|CC:|BCC:|Subject:|Sent:|Date:)\s*/g,'\n$1 ')
+      // Break before reply quote headers
+      .replace(/(On\s+(?:Sun|Mon|Tue|Wed|Thu|Fri|Sat|\w+ \d{1,2})[^\n]{0,60}wrote:)/g,'\n\n$1')
+      // Break before closings
+      .replace(/([^\n])\n?(Best(?:\s+regards)?|Thanks|Sincerely|Regards|Cheers),/g,'$1\n\n$2,')
+      // Add line break before each date in a date list (e.g. shift schedules)
+      .replace(/ (\d{2}\/\d{2}\/\d{4}) (\d{2}\/\d{2}\/\d{4})/g,'\n$1  $2')
+      .replace(/\n{3,}/g,'\n\n').trim();
+  }
+  const formatted = formatEmailBody(rawBody);
   const old = document.getElementById('email-view-modal');
   if(old) old.remove();
   const modal = document.createElement('div');
@@ -3459,25 +3467,24 @@ function openEmailModal(contactId, idx){
         </div>
       </div>
       <div style="display:flex;gap:8px;flex-shrink:0;align-items:center">
-        <a href="${outlookSearch}" target="_blank" style="font-size:11px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:5px 10px;color:#475569;text-decoration:none;white-space:nowrap" title="Search for this email in Outlook Web">🔍 Open in Outlook</a>
+        <a href="${outlookSearch}" target="_blank" style="font-size:11px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:5px 10px;color:#475569;text-decoration:none;white-space:nowrap">🔍 Open in Outlook</a>
         <button onclick="document.getElementById('email-view-modal').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#94a3b8;line-height:1;padding:2px 4px">×</button>
       </div>
     </div>
-    <div style="padding:14px 20px;border-bottom:1px solid #f1f5f9;flex-shrink:0">
-      <div style="font-size:11px;color:#64748b;margin-bottom:3px"><b style="color:#475569">From:</b> ${escHtml(from)}</div>
-      <div style="font-size:11px;color:#64748b"><b style="color:#475569">To:</b> ${escHtml(to)}</div>
+    <div style="padding:12px 20px;border-bottom:1px solid #f1f5f9;flex-shrink:0;font-size:12px;color:#475569;line-height:1.8">
+      <div><b>From:</b> ${escHtml(from)}</div>
+      <div><b>To:</b> ${escHtml(to)}</div>
     </div>
-    <div style="padding:20px;overflow-y:auto;flex:1" id="email-modal-body-area">
-      ${em.body
-        ? `<iframe id="email-iframe" sandbox="allow-same-origin" style="width:100%;border:none;min-height:400px;display:block" srcdoc="${em.body.replace(/"/g,'&quot;').replace(/'/g,'&#39;')}" onload="(function(f){try{f.style.height=f.contentDocument.body.scrollHeight+32+'px'}catch(e){}})(this)"></iframe>`
+    <div style="padding:20px;overflow-y:auto;flex:1">
+      ${isHtml
+        ? `<iframe sandbox="allow-same-origin" style="width:100%;border:none;min-height:400px;display:block" srcdoc="${rawBody.replace(/"/g,'&quot;').replace(/'/g,'&#39;')}" onload="(function(f){try{f.style.height=f.contentDocument.body.scrollHeight+32+'px'}catch(e){}})(this)"></iframe>`
         : (formatted
             ? `<div style="font-size:13px;color:#1e293b;line-height:1.7;white-space:pre-wrap;font-family:inherit">${escHtml(formatted)}</div>`
-            : '<div style="color:#94a3b8;font-size:12px;font-style:italic">No body content stored.</div>'
-          )
+            : '<div style="color:#94a3b8;font-size:12px;font-style:italic">No body content stored.</div>')
       }
     </div>
   </div>`;
-  modal.addEventListener('click', ev => { if(ev.target===modal) modal.remove(); });
+  modal.addEventListener('click', ev=>{ if(ev.target===modal) modal.remove(); });
   document.body.appendChild(modal);
 }
 function injectOutlookBtn(){}
