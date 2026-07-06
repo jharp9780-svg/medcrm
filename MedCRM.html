@@ -3415,21 +3415,33 @@ function openEmailModal(contactId, idx){
   if(!em) return;
   const subject = em.subject||'(no subject)';
   const received = em.received ? new Date(em.received).toLocaleString('en-US',{weekday:'short',month:'long',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}) : '';
-  const from = em.from||'';
-  const to = em.to||'';
-  const body = em.body || em.preview || '';
+  // Clean up Exchange internal DN format like /O=EXCHANGELABS/.../CN=firstname-lastname
+  function cleanAddr(addr){
+    if(!addr) return '';
+    if(addr.startsWith('/O=')||addr.startsWith('/o=')){
+      const cn=addr.match(/CN=([^/\r\n]+)$/i);
+      if(cn) return cn[1].replace(/-/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+      return 'Internal Sender';
+    }
+    return addr;
+  }
+  const from = cleanAddr(em.from||'');
+  const to = (em.to||'').split(';').map(a=>cleanAddr(a.trim())).filter(Boolean).join(', ');
+  const rawBody = em.body || em.preview || '';
   const isSent = em.direction==='sent';
   const outlookSearch = 'https://outlook.office.com/mail/search/query/'+encodeURIComponent(subject);
   // Format body same as activity descriptions
-  let formatted = body
+  let formatted = rawBody
     .replace(/([a-zA-Z])\?([a-zA-Z])/g,"$1'$2")
     .replace(/,([A-Za-z])/g,', $1')
     .replace(/([a-z]):([A-Za-z])/g,'$1: $2')
-    .replace(/([a-z])([A-Z])/g,'$1 $2')
-    .replace(/([.!])([A-Z])/g,'$1 $2')
     .replace(/(On\s+(?:Sun|Mon|Tue|Wed|Thu|Fri|Sat),?\s+\w+\s+\d{1,2},?\s+\d{4})/g,'\n\n$1')
     .replace(/\s*(To:|From:|CC:|BCC:|Subject:|Sent:)/g,'\n$1')
     .replace(/([^\n])\n?(Best(?:\s+[Rr]egards)?|Thanks|Sincerely|Regards|Cheers|Best wishes),/g,'$1\n\n$2,')
+    // Break before date patterns like 09/03/2026
+    .replace(/\s(\d{2}\/\d{2}\/\d{4})/g,'\n$1')
+    // Break long runs of space-separated tokens into rows
+    .replace(/(\d{2}\/\d{2}\/\d{4}\s+\d{2}\/\d{2}\/\d{4})/g,'\n$1')
     .replace(/\n{3,}/g,'\n\n').trim();
   // Remove existing modal if any
   const old = document.getElementById('email-view-modal');
