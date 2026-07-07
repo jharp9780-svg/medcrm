@@ -729,6 +729,8 @@ const _db      = firebase.database();
 const _storage = firebase.storage();
 
 let contacts=[], activities=[], documents=[], crmTasks=[], credentialing={};
+let hospitalList=['Avel','Baptist Memorial','BayCare','Cone','Froedtert','Mercy vICU','Mercy EEG on Call','Mercy Teleneurology','Mercy vHospitalist','Mercy Virtual Nursing','Ochsner','OSF','Remote Seat 1','Sentara','TCH','UCHealth','UK'];
+function saveHospitalList(){_db.ref('hospitalList').set(hospitalList);}
 let _dupCache=null;
 function invalidateCache(){_dupCache=null;}
 
@@ -842,16 +844,19 @@ _auth.onAuthStateChanged(async user=>{
   }
 
   // Load activities and documents in background, then render once with everything
-  const [aSnap,dSnap,tSnap,crSnap]=await Promise.all([
+  const [aSnap,dSnap,tSnap,crSnap,hlSnap]=await Promise.all([
     _db.ref('activities').once('value'),
     _db.ref('documents').once('value'),
     _db.ref('crmtasks').once('value'),
-    _db.ref('credentialing').once('value')
+    _db.ref('credentialing').once('value'),
+    _db.ref('hospitalList').once('value')
   ]);
   activities=toArr(aSnap.val());
   documents=toArr(dSnap.val());
   crmTasks=toArr(tSnap.val());
   credentialing=crSnap.val()||{};
+  const hlVal=hlSnap.val();
+  if(Array.isArray(hlVal)&&hlVal.length) hospitalList=hlVal;
   render();
   autoImportSfNotes();
 });
@@ -4706,10 +4711,14 @@ function renderTasks(){
       <div class="stat-card"><div class="stat-label">Done This Week</div><div class="stat-value stat-green">${doneWeek}</div><div class="stat-sub">completed</div></div>
     </div>
     <div style="background:#fff;border:2px dashed #93c5fd;border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      <input type="text" id="qa-hospital" placeholder="Hospital…"
-        style="width:160px;padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;outline:none;color:#1e293b"
-        onkeydown="if(event.key==='Enter')quickAddTask()"
-        onfocus="this.style.borderColor='#93c5fd'" onblur="this.style.borderColor='var(--border)'">
+      <div style="position:relative;width:160px">
+        <input type="text" id="qa-hospital" placeholder="Hospital…" autocomplete="off"
+          style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;outline:none;color:#1e293b;box-sizing:border-box"
+          oninput="qaHospitalSearch(this.value)" onfocus="qaHospitalSearch(this.value)"
+          onblur="setTimeout(()=>{const d=document.getElementById('qa-hosp-dd');if(d)d.style.display='none'},180)"
+          onkeydown="if(event.key==='Enter')quickAddTask()">
+        <div id="qa-hosp-dd" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:50;max-height:200px;overflow-y:auto;margin-top:3px"></div>
+      </div>
       <input type="text" id="qa-task-title" placeholder="Task name…"
         style="flex:1;min-width:180px;padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;outline:none;color:#1e293b"
         onkeydown="if(event.key==='Enter')quickAddTask()"
@@ -4727,6 +4736,7 @@ function renderTasks(){
         ${CATEGORIES.map(c=>`<option value="${c}" ${c==='Credentialing'?'selected':''}>${c}</option>`).join('')}
       </select>
       <button class="btn btn-primary btn-sm" onclick="quickAddTask()">+ Add Task</button>
+      <button class="btn btn-secondary btn-sm" onclick="openManageHospitals()" title="Add, rename or remove hospitals" style="margin-left:4px">⚙ Hospitals</button>
     </div>
     <div class="filter-bar" style="margin-bottom:16px">
       <input type="text" id="task-search" placeholder="Search tasks or doctor..." value="${escHtml(tasksFilter.search)}"
@@ -4956,10 +4966,30 @@ function inlineEditTask(id, field, el){
       if(m) save(`${m[3]}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`);
       else save(v);
     };
-  } else {
-    // title / hospital — free text
+  } else if(field==='hospital'){
     w=document.createElement('input'); w.type='text'; w.value=t[field]||'';
-    w.placeholder=field==='hospital'?'e.g. Mercy, Texas Health':'Task name…';
+    w.placeholder='Hospital…'; w.style.cssText=s+'min-width:160px;width:100%';
+    const hsugg=document.createElement('div');
+    hsugg.style.cssText='position:fixed;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.15);z-index:9999;max-height:220px;overflow-y:auto;display:none';
+    document.body.appendChild(hsugg);
+    const posH=()=>{const r=w.getBoundingClientRect();hsugg.style.left=r.left+'px';hsugg.style.width=Math.max(r.width,180)+'px';const below=r.bottom+4;hsugg.style.top=(below+220>window.innerHeight&&r.top>220?(r.top-Math.min(220,hospitalList.length*38+8)):below)+'px';};
+    const renderH=val=>{
+      const q=(val||'').toLowerCase();
+      const hits=hospitalList.filter(h=>!q||h.toLowerCase().includes(q));
+      if(!hits.length){hsugg.style.display='none';return;}
+      hsugg.innerHTML=hits.map(h=>`<div data-h="${escHtml(h)}" style="padding:8px 14px;font-size:13px;cursor:pointer;color:#1e293b;border-bottom:1px solid #f1f5f9" onmousedown="event.preventDefault()" onmouseenter="this.style.background='#eff6ff'" onmouseleave="this.style.background=''">${escHtml(h)}</div>`).join('');
+      hsugg.style.display='block'; posH();
+    };
+    const cleanH=()=>{if(hsugg.parentNode)hsugg.parentNode.removeChild(hsugg);};
+    w.oninput=()=>renderH(w.value);
+    w.onfocus=()=>renderH(w.value);
+    w.onkeydown=e=>{if(e.key==='Enter'){cleanH();save(w.value.trim());}if(e.key==='Escape'){cleanH();cancel();}};
+    w.onblur=()=>{setTimeout(()=>{if(el.dataset.editing){cleanH();save(w.value.trim());}},180);};
+    hsugg.onclick=e=>{const d=e.target.closest('[data-h]');if(d){cleanH();save(d.dataset.h);}};
+  } else {
+    // title — free text
+    w=document.createElement('input'); w.type='text'; w.value=t[field]||'';
+    w.placeholder='Task name…';
     w.style.cssText=s+'min-width:160px;width:100%';
     w.onkeydown=e=>{if(e.key==='Enter') save(w.value.trim()); if(e.key==='Escape') cancel();};
     w.onblur=()=>save(w.value.trim());
@@ -4972,6 +5002,41 @@ function inlineEditTask(id, field, el){
 }
 
 let _qaDocId='',_qaDocName='';
+
+function qaHospitalSearch(val){
+  const dd=document.getElementById('qa-hosp-dd');
+  if(!dd) return;
+  const q=(val||'').toLowerCase();
+  const hits=hospitalList.filter(h=>!q||h.toLowerCase().includes(q));
+  if(!hits.length){dd.style.display='none';return;}
+  dd.innerHTML=hits.map(h=>`<div onclick="document.getElementById('qa-hospital').value='${escHtml(h).replace(/'/g,"&#39;")}';document.getElementById('qa-hosp-dd').style.display='none'" style="padding:8px 12px;cursor:pointer;font-size:13px;color:#1e293b;border-bottom:1px solid #f1f5f9" onmouseenter="this.style.background='#eff6ff'" onmouseleave="this.style.background=''">${escHtml(h)}</div>`).join('');
+  dd.style.display='block';
+}
+
+function openManageHospitals(){
+  const modal=document.getElementById('manage-hospitals-modal');
+  if(modal) modal.style.display='flex';
+  renderManageHospitals();
+}
+function renderManageHospitals(){
+  const el=document.getElementById('mh-list');
+  if(!el) return;
+  el.innerHTML=hospitalList.map((h,i)=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f1f5f9">
+      <input value="${escHtml(h)}" style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;outline:none"
+        onchange="hospitalList[${i}]=this.value.trim();saveHospitalList()" onfocus="this.style.borderColor='#93c5fd'" onblur="this.style.borderColor='var(--border)'">
+      <button onclick="hospitalList.splice(${i},1);saveHospitalList();renderManageHospitals()" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px;padding:0 4px" title="Remove">✕</button>
+    </div>`).join('');
+}
+function addHospital(){
+  const inp=document.getElementById('mh-new');
+  if(!inp) return;
+  const v=inp.value.trim();
+  if(!v) return;
+  if(!hospitalList.includes(v)){hospitalList.push(v);hospitalList.sort((a,b)=>a.localeCompare(b));saveHospitalList();}
+  inp.value='';
+  renderManageHospitals();
+}
 
 function taskDocSearch(val){
   const dd=document.getElementById('qa-doc-dropdown');
@@ -5305,6 +5370,23 @@ function saveTaskFromModal(){
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('add-provider-modal')">Cancel</button>
       <button class="btn btn-primary" onclick="saveNewProvider()">Add Provider</button>
+    </div>
+  </div>
+</div>
+
+<!-- Manage Hospitals Modal -->
+<div id="manage-hospitals-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center" onclick="if(event.target===this)this.style.display='none'">
+  <div style="background:#fff;border-radius:12px;padding:28px 28px 20px;width:380px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+      <h3 style="margin:0;font-size:16px;font-weight:600;color:#0f172a">Manage Hospitals</h3>
+      <button onclick="document.getElementById('manage-hospitals-modal').style.display='none'" style="background:none;border:none;font-size:20px;cursor:pointer;color:#64748b;line-height:1">×</button>
+    </div>
+    <div id="mh-list" style="max-height:320px;overflow-y:auto;margin-bottom:14px"></div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <input id="mh-new" placeholder="Add hospital…" style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;outline:none"
+        onfocus="this.style.borderColor='#93c5fd'" onblur="this.style.borderColor='var(--border)'"
+        onkeydown="if(event.key==='Enter')addHospital()">
+      <button class="btn btn-primary btn-sm" onclick="addHospital()">+ Add</button>
     </div>
   </div>
 </div>
