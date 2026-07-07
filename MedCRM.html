@@ -4687,10 +4687,13 @@ function renderTasks(){
         <h2 style="font-size:20px;font-weight:700;color:#1e293b">Task Tracker</h2>
         <p style="font-size:13px;color:#64748b;margin-top:2px">Credentialing, licensing &amp; onboarding tasks</p>
       </div>
-      <button class="btn btn-primary" onclick="openTaskModal(null)">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        New Task
-      </button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-secondary" onclick="openAddProviderModal()">+ Add Provider</button>
+        <button class="btn btn-primary" onclick="openTaskModal(null)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          New Task
+        </button>
+      </div>
     </div>
     <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px">
       <div class="stat-card"><div class="stat-label">Open Tasks</div><div class="stat-value stat-blue">${openCount}</div><div class="stat-sub">of ${crmTasks.length} total</div></div>
