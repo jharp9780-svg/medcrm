@@ -4831,7 +4831,7 @@ function renderTasks(){
       </table></div>`}
     </div>`;
   const ts=document.getElementById('task-search');
-  if(ts){const len=ts.value.length;ts.focus();ts.setSelectionRange(len,len);}
+  if(ts){const len=ts.value.length;ts.focus({preventScroll:true});ts.setSelectionRange(len,len);}
 }
 
 function inlineEditTask(id, field, el){
