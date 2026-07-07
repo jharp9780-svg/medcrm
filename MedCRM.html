@@ -4754,6 +4754,47 @@ function toggleTmTask(launchId,taskId){
   document.querySelectorAll('details[data-lid]').forEach(d=>{if(d.open)_tmOpenCards.add(d.dataset.lid);else _tmOpenCards.delete(d.dataset.lid);});
   renderTMinus();
 }
+function exportTMinusExcel(){
+  const today=new Date(); today.setHours(0,0,0,0);
+  const sorted=[...tminusLaunches].sort((a,b)=>{
+    if(!a.launchDate) return 1; if(!b.launchDate) return -1;
+    return new Date(a.launchDate)-new Date(b.launchDate);
+  });
+  // Sheet 1: Summary
+  let csv='NEW PHYSICIAN LAUNCHES\n';
+  csv+='#,Physician,Office,Client / Program,First Shift Date,Type,Tasks Done,Tasks Total,Status\n';
+  sorted.forEach((l,i)=>{
+    const ld=l.launchDate?new Date(l.launchDate+'T00:00:00'):null;
+    const isPast=ld&&ld<today;
+    const docName=l.doctor||l.doctorEvent.split(' - ')[0];
+    const hosp=l.hospital||l.launchNote||l.doctorEvent.split(' - ').slice(1).join(' - ')||'';
+    const tasks=toArr(l.tasks);
+    const done=tasks.filter(t=>t.done).length;
+    const dateStr=ld?ld.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'';
+    const type=l.launchType==='hospital'?'New Hospital Start':'New Office Setup';
+    const status=isPast?'Launched':'Upcoming';
+    csv+=`${i+1},"${docName}","${l.office||''}","${hosp}","${dateStr}","${type}",${done},${tasks.length},"${status}"\n`;
+  });
+  csv+='\n\nPREP TASKS DETAIL\n';
+  csv+='Physician,Office,Client,First Shift,Task Group,Task,Owner,Due Date,Done,Notes\n';
+  sorted.forEach(l=>{
+    const docName=l.doctor||l.doctorEvent.split(' - ')[0];
+    const hosp=l.hospital||l.launchNote||l.doctorEvent.split(' - ').slice(1).join(' - ')||'';
+    const ld=l.launchDate?new Date(l.launchDate+'T00:00:00'):null;
+    const dateStr=ld?ld.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'';
+    toArr(l.tasks).forEach(t=>{
+      const group=t.txDays===0?'Launch Day':`T${t.txDays}`;
+      const due=t.dueDate?new Date(t.dueDate+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'';
+      csv+=`"${docName}","${l.office||''}","${hosp}","${dateStr}","${group}","${t.task}","${t.owner||''}","${due}","${t.done?'Yes':'No'}","${(t.notes||'').replace(/"/g,"'")}"\n`;
+    });
+  });
+  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='TMinus_Launches_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
 function changeLaunchType(launchId){
   const launch=tminusLaunches.find(x=>x.id===launchId);
   if(!launch) return;
@@ -4932,9 +4973,11 @@ function renderTMinus(){
           <h2 style="margin:0;font-size:22px;font-weight:700;color:#0f172a">🚀 T-Minus</h2>
           <p style="margin:4px 0 0;color:#64748b;font-size:14px">Doctor launch preparation tracker</p>
         </div>
-        <button class="btn btn-primary" onclick="openNewLaunchModal()">+ New Launch</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary" onclick="exportTMinusExcel()">⬇ Export Excel</button>
+          <button class="btn btn-primary" onclick="openNewLaunchModal()">+ New Launch</button>
+        </div>
       </div>
-      ${upcoming.length?`
       <div style="background:#fff;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;margin-bottom:28px">
         <div style="background:#0f172a;padding:12px 18px;display:grid;grid-template-columns:2em 1fr 1fr 1fr 1fr;gap:12px;align-items:center">
           <span style="font-size:11px;font-weight:700;color:#94a3b8">#</span>
@@ -4957,8 +5000,23 @@ function renderTMinus(){
             <span style="font-size:13px;font-weight:600;color:${dateColor}">${ld?ld.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—'}${daysUntil!==null?`<span style="font-size:11px;font-weight:400;color:${dateColor};margin-left:6px">(${daysUntil===0?'today':'T-'+daysUntil})</span>`:''}</span>
           </div>`;
         }).join('')}
-      </div>`:'<p style="color:#94a3b8;text-align:center;padding:40px 0">No upcoming launches. Add one with + New Launch.</p>'}
-      ${upcoming.length?`<h3 style="font-size:13px;font-weight:700;text-transform:uppercase;color:#64748b;letter-spacing:.05em;margin:0 0 12px">Upcoming (${upcoming.length})</h3>${upcoming.map(l=>launchCard(l,false)).join('')}`:''}
+        ${past.length?`<div id="tm-past-table-rows" style="display:none">${past.map((l,i)=>{
+          const ld=l.launchDate?new Date(l.launchDate+'T00:00:00'):null;
+          const docName=l.doctor||l.doctorEvent.split(' - ')[0];
+          const hosp=l.hospital||l.launchNote||l.doctorEvent.split(' - ').slice(1).join(' - ')||'';
+          return `<div style="padding:11px 18px;display:grid;grid-template-columns:2em 1fr 1fr 1fr 1fr;gap:12px;align-items:center;border-top:1px solid #f1f5f9;background:#f8fafc;opacity:0.7">
+            <span style="font-size:13px;color:#94a3b8;font-weight:600">${upcoming.length+i+1}</span>
+            <span style="font-size:13px;font-weight:500;color:#94a3b8">${escHtml(docName)}</span>
+            <span style="font-size:13px;color:#94a3b8">${escHtml(l.office||'—')}</span>
+            <span style="font-size:13px;color:#94a3b8">${escHtml(hosp||'—')}</span>
+            <span style="font-size:13px;color:#94a3b8">${ld?ld.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—'} <span style="font-size:11px;background:#dcfce7;color:#15803d;padding:1px 6px;border-radius:10px">Launched</span></span>
+          </div>`;
+        }).join('')}</div>
+        <div style="border-top:1px solid #f1f5f9;padding:10px 18px">
+          <button id="tm-past-toggle-btn" onclick="const r=document.getElementById('tm-past-table-rows');const shown=r.style.display!=='none';r.style.display=shown?'none':'block';this.textContent=shown?'▼ Show ${past.length} past launches':'▲ Hide past launches';" style="background:none;border:none;font-size:12px;font-weight:600;color:#94a3b8;cursor:pointer;padding:0">▼ Show ${past.length} past launches</button>
+        </div>`:''}
+      </div>
+      ${upcoming.length?`<h3 style="font-size:13px;font-weight:700;text-transform:uppercase;color:#64748b;letter-spacing:.05em;margin:0 0 12px">Upcoming (${upcoming.length})</h3>${upcoming.map(l=>launchCard(l,false)).join('')}`:'<p style="color:#94a3b8;text-align:center;padding:40px 0">No upcoming launches. Add one with + New Launch.</p>'}
       ${past.length?`<div style="margin-top:24px"><button onclick="const b=this.parentElement.querySelector('.past-launches-body');const shown=b.style.display!=='none';b.style.display=shown?'none':'block';this.textContent=shown?'▼ Show past launches (${past.length})':'▲ Hide past launches (${past.length})';" style="background:none;border:none;font-size:12px;font-weight:600;color:#94a3b8;cursor:pointer;padding:0;letter-spacing:.03em">▼ Show past launches (${past.length})</button><div class="past-launches-body" style="display:none;margin-top:12px">${past.map(l=>launchCard(l,true)).join('')}</div></div>`:''}
     </div>`;
   // restore open details panels
