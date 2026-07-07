@@ -4828,31 +4828,17 @@ function editTmTaskNote(launchId,taskId){
   document.querySelectorAll('details[data-lid]').forEach(d=>{if(d.open)_tmOpenCards.add(d.dataset.lid);else _tmOpenCards.delete(d.dataset.lid);});
   renderTMinus();
 }
-function editLaunchDate(launchId){
+function updateLaunchDate(launchId,val){
   const launch=tminusLaunches.find(x=>x.id===launchId);
-  if(!launch) return;
-  const cur=launch.launchDate||'';
-  const inp=document.createElement('input');
-  inp.type='date'; inp.value=cur;
-  inp.style.cssText='position:fixed;opacity:0;pointer-events:none';
-  document.body.appendChild(inp);
-  inp.showPicker&&inp.showPicker();
-  inp.focus();
-  inp.onchange=()=>{
-    const val=inp.value;
-    document.body.removeChild(inp);
-    if(!val||val===cur) return;
-    launch.launchDate=val;
-    // recalculate task due dates from new launch date
-    const ld=new Date(val+'T00:00:00');
-    toArr(launch.tasks).forEach(t=>{
-      if(t.txDays!=null){const d=new Date(ld);d.setDate(d.getDate()+t.txDays);t.dueDate=d.toISOString().slice(0,10);}
-    });
-    saveTmLaunch(launch);
-    document.querySelectorAll('details[data-lid]').forEach(d=>{if(d.open)_tmOpenCards.add(d.dataset.lid);else _tmOpenCards.delete(d.dataset.lid);});
-    renderTMinus();
-  };
-  inp.onblur=()=>{setTimeout(()=>{if(inp.parentNode)document.body.removeChild(inp);},200);};
+  if(!launch||!val||val===launch.launchDate) return;
+  launch.launchDate=val;
+  const ld=new Date(val+'T00:00:00');
+  toArr(launch.tasks).forEach(t=>{
+    if(t.txDays!=null){const d=new Date(ld);d.setDate(d.getDate()+t.txDays);t.dueDate=d.toISOString().slice(0,10);}
+  });
+  saveTmLaunch(launch);
+  document.querySelectorAll('details[data-lid]').forEach(d=>{if(d.open)_tmOpenCards.add(d.dataset.lid);else _tmOpenCards.delete(d.dataset.lid);});
+  renderTMinus();
 }
 
 function openNewLaunchModal(){
@@ -4947,7 +4933,10 @@ function renderTMinus(){
           </div>
           <div style="display:flex;align-items:center;gap:8px;margin-top:4px;flex-wrap:wrap">
             <span style="font-size:13px;color:#64748b">${escHtml(l.launchNote||'')}</span>
-            <button onclick="editLaunchDate('${l.id}')" style="font-size:12px;font-weight:600;color:#2563eb;background:#eff6ff;border:1px solid #bfdbfe;border-radius:5px;padding:2px 8px;cursor:pointer">📅 ${ld?ld.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}):'Set first shift date'}</button>
+            <label style="position:relative;display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;color:#2563eb;background:#eff6ff;border:1px solid #bfdbfe;border-radius:5px;padding:2px 8px;cursor:pointer">
+              📅 <span>${ld?ld.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}):'Set first shift date'}</span>
+              <input type="date" value="${l.launchDate||''}" onchange="updateLaunchDate('${l.id}',this.value)" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%">
+            </label>
           </div>
           ${l.office?`<div style="font-size:12px;color:#94a3b8;margin-top:2px">📍 ${escHtml(l.office)}</div>`:''}
         </div>
