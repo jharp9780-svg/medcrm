@@ -244,6 +244,10 @@ textarea{resize:vertical;min-height:80px}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Doctors
         <span class="nav-count" id="nav-count-doctors">0</span>
       </div>
+      <div class="nav-item" onclick="showView('credentialing')" id="nav-credentialing">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg>Credentialing
+        <span class="nav-count" id="nav-count-cred" style="display:none;background:#dc2626;color:#fff">0</span>
+      </div>
       <div class="nav-item" onclick="showView('orgs')" id="nav-orgs">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Organizations
         <span class="nav-count" id="nav-count-orgs">0</span>
@@ -721,7 +725,7 @@ const _auth    = firebase.auth();
 const _db      = firebase.database();
 const _storage = firebase.storage();
 
-let contacts=[], activities=[], documents=[], crmTasks=[];
+let contacts=[], activities=[], documents=[], crmTasks=[], credentialing={};
 let _dupCache=null;
 function invalidateCache(){_dupCache=null;}
 
@@ -835,14 +839,16 @@ _auth.onAuthStateChanged(async user=>{
   }
 
   // Load activities and documents in background, then render once with everything
-  const [aSnap,dSnap,tSnap]=await Promise.all([
+  const [aSnap,dSnap,tSnap,crSnap]=await Promise.all([
     _db.ref('activities').once('value'),
     _db.ref('documents').once('value'),
-    _db.ref('crmtasks').once('value')
+    _db.ref('crmtasks').once('value'),
+    _db.ref('credentialing').once('value')
   ]);
   activities=toArr(aSnap.val());
   documents=toArr(dSnap.val());
   crmTasks=toArr(tSnap.val());
+  credentialing=crSnap.val()||{};
   render();
   autoImportSfNotes();
 });
@@ -887,7 +893,7 @@ function showView(v){
   currentView=v;
   document.querySelectorAll('.nav-item').forEach(el=>el.classList.remove('active'));
   document.getElementById('nav-'+v)?.classList.add('active');
-  const titles={dashboard:'Dashboard',contacts:'Contacts',pipeline:'Pipeline',activity:'Activity Log',tasks:'Task Tracker'};
+  const titles={dashboard:'Dashboard',contacts:'Contacts',pipeline:'Pipeline',activity:'Activity Log',tasks:'Task Tracker',credentialing:'Credentialing'};
   document.getElementById('page-title').textContent=titles[v]||v;
   document.getElementById('global-search').value='';
   searchQuery='';
@@ -905,6 +911,7 @@ function render(){
   else if(currentView==='activity') renderActivity();
   else if(currentView==='dedup') renderDedup();
   else if(currentView==='tasks') renderTasks();
+  else if(currentView==='credentialing') renderCredentialing();
 }
 function updateNavCounts(){
   document.getElementById('nav-count-contacts').textContent=contacts.length;
@@ -923,6 +930,15 @@ function updateNavCounts(){
   const openTasks=crmTasks.filter(t=>t.status!=='done').length;
   const tasksEl=document.getElementById('nav-count-tasks');
   if(tasksEl){tasksEl.textContent=openTasks;tasksEl.style.display=openTasks?'':'none';}
+  // Credentialing: count providers with expired or expiring-soon items
+  let credAlerts=0;
+  const nowMs=Date.now();
+  Object.values(credentialing).forEach(p=>{
+    const allExp=[...Object.values(p.licenses||{}).map(l=>l.expiry),...Object.values(p.boards||{}).map(b=>b.expiry),...Object.values(p.malpractice||{}).map(m=>m.expiry),p.deaExpiry].filter(Boolean);
+    if(allExp.some(e=>(new Date(e)-nowMs)<90*24*60*60*1000)) credAlerts++;
+  });
+  const credEl=document.getElementById('nav-count-cred');
+  if(credEl){credEl.textContent=credAlerts;credEl.style.display=credAlerts?'':'none';}
 }
 
 function normalize(s){return(s||'').toLowerCase().replace(/\s+/g,' ').trim();}
@@ -3634,6 +3650,494 @@ function deleteNote(contactId,ts){
   toast('Note deleted');
 }
 
+// ===== CREDENTIALING MODULE =====
+let credView=null; // null=list, contactId=detail
+let credTab='info';
+
+function saveProviderProfile(cid){_db.ref('credentialing/'+cid).set(credentialing[cid]||null);updateNavCounts();}
+function gp(cid){if(!credentialing[cid])credentialing[cid]={};return credentialing[cid];}
+function credUid(){return 'c'+Date.now()+Math.random().toString(36).slice(2,5);}
+function daysUntil(ds){if(!ds)return null;return Math.ceil((new Date(ds)-new Date())/(864e5));}
+function expiryBadge(ds){
+  const d=daysUntil(ds);if(d===null)return '';
+  if(d<0)return'<span class="badge badge-red">Expired</span>';
+  if(d<=30)return`<span class="badge badge-red">${d}d left</span>`;
+  if(d<=90)return`<span class="badge badge-amber">${d}d left</span>`;
+  return`<span class="badge badge-green">${d}d</span>`;
+}
+function fmtDate(ds){if(!ds)return'—';return new Date(ds+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});}
+function avatarBg(name){return['#2563eb','#7c3aed','#059669','#d97706','#db2777'][(name||'?').charCodeAt(0)%5];}
+
+function credProviderStatus(cid){
+  const p=credentialing[cid]||{};
+  const exps=[...Object.values(p.licenses||{}).map(l=>l.expiry),...Object.values(p.boards||{}).map(b=>b.expiry),...Object.values(p.malpractice||{}).map(m=>m.expiry),p.deaExpiry].filter(Boolean);
+  let expired=false,soon=false;
+  exps.forEach(e=>{const d=daysUntil(e);if(d!==null){if(d<0)expired=true;else if(d<=90)soon=true;}});
+  return expired?'expired':soon?'soon':'ok';
+}
+
+function renderCredentialing(){
+  if(credView){renderProviderDetail(credView);return;}
+  const providers=contacts.filter(c=>c.name).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  const expiredCount=providers.filter(p=>credProviderStatus(p.id)==='expired').length;
+  const soonCount=providers.filter(p=>credProviderStatus(p.id)==='soon').length;
+
+  const searchVal=(document.getElementById('cred-search')||{}).value||'';
+  const filterVal=(document.getElementById('cred-status-filter')||{}).value||'all';
+  let filtered=providers.filter(p=>{
+    if(searchVal&&!(p.name||'').toLowerCase().includes(searchVal.toLowerCase()))return false;
+    const st=credProviderStatus(p.id);
+    if(filterVal==='expiring'&&!['expired','soon'].includes(st))return false;
+    if(filterVal==='expired'&&st!=='expired')return false;
+    return true;
+  });
+
+  document.getElementById('content').innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <div><h2 style="font-size:20px;font-weight:700;color:#1e293b">Credentialing</h2>
+      <p style="font-size:13px;color:#64748b;margin-top:2px">Licenses, boards, CME &amp; documents per provider</p></div>
+    </div>
+    <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px">
+      <div class="stat-card"><div class="stat-label">Providers</div><div class="stat-value stat-blue">${providers.length}</div><div class="stat-sub">total</div></div>
+      <div class="stat-card"><div class="stat-label">Expired Items</div><div class="stat-value stat-red">${expiredCount}</div><div class="stat-sub">need renewal</div></div>
+      <div class="stat-card"><div class="stat-label">Expiring Soon</div><div class="stat-value stat-amber">${soonCount}</div><div class="stat-sub">within 90 days</div></div>
+      <div class="stat-card"><div class="stat-label">Up to Date</div><div class="stat-value stat-green">${providers.length-expiredCount-soonCount}</div><div class="stat-sub">providers</div></div>
+    </div>
+    <div class="filter-bar" style="margin-bottom:16px">
+      <input type="text" id="cred-search" placeholder="Search providers..." value="${escHtml(searchVal)}"
+        oninput="renderCredentialing()" style="padding:7px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;outline:none;width:220px">
+      <select class="filter-select" id="cred-status-filter" onchange="renderCredentialing()">
+        <option value="all" ${filterVal==='all'?'selected':''}>All Providers</option>
+        <option value="expiring" ${filterVal==='expiring'?'selected':''}>Expiring / Expired</option>
+        <option value="expired" ${filterVal==='expired'?'selected':''}>Expired Only</option>
+      </select>
+      <span style="font-size:12px;color:#64748b">${filtered.length} provider${filtered.length!==1?'s':''}</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px">
+      ${filtered.map(c=>{
+        const p=credentialing[c.id]||{};
+        const licN=Object.keys(p.licenses||{}).length;
+        const brdN=Object.keys(p.boards||{}).length;
+        const docN=Object.keys(p.documents||{}).length;
+        const st=credProviderStatus(c.id);
+        const dot=st==='expired'?'#dc2626':st==='soon'?'#d97706':'#16a34a';
+        const dotTitle=st==='expired'?'Has expired items':st==='soon'?'Expiring within 90 days':'All credentials current';
+        const ini=(c.name||'?').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
+        return`<div class="card" style="padding:16px;cursor:pointer;transition:box-shadow .15s" onclick="openProviderProfile('${c.id}')" onmouseover="this.style.boxShadow='0 4px 16px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow=''">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+            <div style="width:42px;height:42px;border-radius:50%;background:${avatarBg(c.name)};color:#fff;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${ini}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:700;color:#1e293b;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(c.name)}</div>
+              <div style="font-size:11px;color:#64748b">${escHtml(c.specialty||c.type||'Provider')}</div>
+            </div>
+            <div style="width:10px;height:10px;border-radius:50%;background:${dot};flex-shrink:0" title="${dotTitle}"></div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            ${p.npi?`<span class="badge badge-blue" style="font-size:10px">NPI ${escHtml(p.npi)}</span>`:''}
+            <span class="badge badge-gray" style="font-size:10px">${licN} license${licN!==1?'s':''}</span>
+            ${brdN?`<span class="badge badge-purple" style="font-size:10px">${brdN} board${brdN!==1?'s':''}</span>`:''}
+            ${docN?`<span class="badge badge-green" style="font-size:10px">${docN} doc${docN!==1?'s':''}</span>`:''}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+
+function openProviderProfile(cid){credView=cid;credTab='info';renderProviderDetail(cid);}
+
+function renderProviderDetail(cid){
+  const c=contacts.find(x=>x.id===cid);
+  if(!c){credView=null;renderCredentialing();return;}
+  const p=gp(cid);
+  const ini=(c.name||'?').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
+  const TABS=[['info','Overview'],['licenses','Licenses'],['boards','Boards'],['cme','CME'],['malpractice','Malpractice'],['documents','Documents']];
+  const counts={licenses:Object.keys(p.licenses||{}).length,boards:Object.keys(p.boards||{}).length,cme:Object.keys(p.cme||{}).length,malpractice:Object.keys(p.malpractice||{}).length,documents:Object.keys(p.documents||{}).length};
+  let body='';
+  if(credTab==='info') body=renderCredInfoTab(cid,p,c);
+  else if(credTab==='licenses') body=renderLicensesTab(cid,p);
+  else if(credTab==='boards') body=renderBoardsTab(cid,p);
+  else if(credTab==='cme') body=renderCmeTab(cid,p);
+  else if(credTab==='malpractice') body=renderMalpracticeTab(cid,p);
+  else if(credTab==='documents') body=renderCredDocsTab(cid,p);
+  document.getElementById('content').innerHTML=`
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+      <button class="btn btn-secondary btn-sm" onclick="credView=null;renderCredentialing()">← Back</button>
+      <div style="width:44px;height:44px;border-radius:50%;background:${avatarBg(c.name)};color:#fff;font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${ini}</div>
+      <div>
+        <div style="font-size:18px;font-weight:700;color:#1e293b">${escHtml(c.name)}</div>
+        <div style="font-size:12px;color:#64748b">${escHtml(c.specialty||'')}${c.org?' · '+escHtml(c.org):''}</div>
+      </div>
+    </div>
+    <div class="tabs" style="margin-bottom:20px">
+      ${TABS.map(([v,l])=>`<div class="tab${credTab===v?' active':''}" onclick="credTab='${v}';renderProviderDetail('${cid}')">${l}${counts[v]?`<span style="background:#e2e8f0;border-radius:8px;font-size:10px;padding:1px 5px;margin-left:4px">${counts[v]}</span>`:''}</div>`).join('')}
+    </div>
+    ${body}`;
+}
+
+function renderCredInfoTab(cid,p,c){
+  const fields=[['NPI Number',p.npi],['DEA Number',p.deaNumber],['DEA Expiry',fmtDate(p.deaExpiry)+(p.deaExpiry?' '+expiryBadge(p.deaExpiry):'')],['ECFMG Number',p.ecfmgNumber],['Date of Birth',fmtDate(p.dob)],['SSN Last 4',p.ssn4?'···· '+p.ssn4:null],['Medical School',p.medSchool],['Graduation Year',p.gradYear],['Residency / Fellowship',p.residency]];
+  const allExp=[...Object.values(p.licenses||{}).map(l=>({label:(l.state||'?')+' License',expiry:l.expiry})),...Object.values(p.boards||{}).map(b=>({label:(b.specialty||'?')+' Board',expiry:b.expiry})),...Object.values(p.malpractice||{}).map(m=>({label:'Malpractice ('+(m.carrier||'?')+')',expiry:m.expiry})),...(p.deaExpiry?[{label:'DEA Certificate',expiry:p.deaExpiry}]:[])].filter(x=>x.expiry).sort((a,b)=>new Date(a.expiry)-new Date(b.expiry));
+  return`
+    <div class="card" style="padding:22px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#64748b">Provider Details</div>
+        <button class="btn btn-secondary btn-sm" onclick="openCredInfoEdit('${cid}')">Edit</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+        ${fields.map(([lbl,val])=>`<div>
+          <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;margin-bottom:3px">${lbl}</div>
+          <div style="font-size:13px;color:${val?'#1e293b':'#cbd5e1'}">${val||'—'}</div>
+        </div>`).join('')}
+      </div>
+    </div>
+    <div class="card" style="padding:22px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#64748b;margin-bottom:14px">Expiry Overview</div>
+      ${!allExp.length?'<div style="font-size:12px;color:#94a3b8;padding:8px 0">No expiry dates on file — add licenses, boards, or malpractice to track</div>':
+        `<div style="display:flex;flex-direction:column;gap:8px">${allExp.map(item=>{
+          const d=daysUntil(item.expiry);
+          const bg=d<0?'#fee2e2':d<=30?'#fee2e2':d<=90?'#fef3c7':'#f0fdf4';
+          const col=d<0?'#dc2626':d<=30?'#dc2626':d<=90?'#d97706':'#16a34a';
+          const lbl=d<0?`Expired ${Math.abs(d)}d ago`:d===0?'Expires today':`${d} days left`;
+          return`<div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:${bg};border-radius:8px">
+            <div style="flex:1;font-size:13px;font-weight:500;color:#1e293b">${escHtml(item.label)}</div>
+            <div style="font-size:12px;color:#64748b">${fmtDate(item.expiry)}</div>
+            <div style="font-size:11px;font-weight:700;color:${col};min-width:100px;text-align:right">${lbl}</div>
+          </div>`;
+        }).join('')}</div>`}
+    </div>`;
+}
+
+function renderLicensesTab(cid,p){
+  const items=Object.values(p.licenses||{});
+  return`<div class="card">
+    <div class="card-header"><span class="card-title">State Licenses</span>
+      <button class="btn btn-primary btn-sm ml-auto" onclick="openCredItemModal('license','${cid}',null)">+ Add License</button></div>
+    ${!items.length?'<div style="padding:40px;text-align:center;color:#94a3b8;font-size:13px">No licenses on file</div>':`
+    <div class="table-wrap"><table><thead><tr>
+      <th>State</th><th>License #</th><th>Type</th><th>Issued</th><th>Expiry</th><th>Status</th><th style="width:100px"></th>
+    </tr></thead><tbody>
+    ${items.map(l=>`<tr>
+      <td style="font-weight:700">${escHtml(l.state||'—')}</td>
+      <td style="font-family:monospace;font-size:12px">${escHtml(l.number||'—')}</td>
+      <td>${escHtml(l.type||'MD')}</td>
+      <td style="font-size:12px">${fmtDate(l.issued)}</td>
+      <td><div style="display:flex;align-items:center;gap:6px"><span style="font-size:12px">${fmtDate(l.expiry)}</span>${expiryBadge(l.expiry)}</div></td>
+      <td><span class="badge ${l.status==='Active'?'badge-green':l.status==='Pending'?'badge-amber':'badge-red'}">${escHtml(l.status||'Active')}</span></td>
+      <td><button class="btn btn-xs btn-secondary" onclick="openCredItemModal('license','${cid}','${l.id}')">Edit</button> <button class="btn btn-xs btn-danger" onclick="deleteCredItem('licenses','${cid}','${l.id}')">✕</button></td>
+    </tr>`).join('')}
+    </tbody></table></div>`}
+  </div>`;
+}
+
+function renderBoardsTab(cid,p){
+  const items=Object.values(p.boards||{});
+  return`<div class="card">
+    <div class="card-header"><span class="card-title">Board Certifications</span>
+      <button class="btn btn-primary btn-sm ml-auto" onclick="openCredItemModal('board','${cid}',null)">+ Add Board</button></div>
+    ${!items.length?'<div style="padding:40px;text-align:center;color:#94a3b8;font-size:13px">No board certifications on file</div>':`
+    <div class="table-wrap"><table><thead><tr>
+      <th>Specialty</th><th>Board</th><th>Certified</th><th>MOC Due</th><th>Status</th><th style="width:100px"></th>
+    </tr></thead><tbody>
+    ${items.map(b=>`<tr>
+      <td style="font-weight:700">${escHtml(b.specialty||'—')}</td>
+      <td style="font-size:12px">${escHtml(b.boardName||'—')}</td>
+      <td style="font-size:12px">${fmtDate(b.certDate)}</td>
+      <td><div style="display:flex;align-items:center;gap:6px"><span style="font-size:12px">${fmtDate(b.expiry)}</span>${expiryBadge(b.expiry)}</div></td>
+      <td><span class="badge ${b.status==='Active'?'badge-green':b.status==='Pending'?'badge-amber':'badge-red'}">${escHtml(b.status||'Active')}</span></td>
+      <td><button class="btn btn-xs btn-secondary" onclick="openCredItemModal('board','${cid}','${b.id}')">Edit</button> <button class="btn btn-xs btn-danger" onclick="deleteCredItem('boards','${cid}','${b.id}')">✕</button></td>
+    </tr>`).join('')}
+    </tbody></table></div>`}
+  </div>`;
+}
+
+function renderCmeTab(cid,p){
+  const items=Object.values(p.cme||{});
+  return`<div class="card">
+    <div class="card-header"><span class="card-title">CME — Continuing Medical Education</span>
+      <button class="btn btn-primary btn-sm ml-auto" onclick="openCredItemModal('cme','${cid}',null)">+ Add CME Period</button></div>
+    ${!items.length?'<div style="padding:40px;text-align:center;color:#94a3b8;font-size:13px">No CME records on file</div>':`
+    <div class="table-wrap"><table><thead><tr>
+      <th>Period</th><th>Required</th><th>Earned</th><th>Deadline</th><th>Progress</th><th style="width:100px"></th>
+    </tr></thead><tbody>
+    ${items.map(cm=>{
+      const pct=cm.required?Math.min(100,Math.round((cm.earned||0)/cm.required*100)):0;
+      const col=pct>=100?'#16a34a':pct>=60?'#d97706':'#dc2626';
+      return`<tr>
+        <td style="font-weight:700">${escHtml(cm.period||'—')}</td>
+        <td>${cm.required||'—'} credits</td>
+        <td>${cm.earned||0} credits</td>
+        <td><div style="display:flex;align-items:center;gap:6px"><span style="font-size:12px">${fmtDate(cm.deadline)}</span>${expiryBadge(cm.deadline)}</div></td>
+        <td><div style="display:flex;align-items:center;gap:8px">
+          <div style="flex:1;background:#e2e8f0;border-radius:4px;height:8px;overflow:hidden;min-width:80px"><div style="width:${pct}%;background:${col};height:100%;border-radius:4px;transition:width .3s"></div></div>
+          <span style="font-size:11px;font-weight:700;color:${col};width:32px">${pct}%</span>
+        </div></td>
+        <td><button class="btn btn-xs btn-secondary" onclick="openCredItemModal('cme','${cid}','${cm.id}')">Edit</button> <button class="btn btn-xs btn-danger" onclick="deleteCredItem('cme','${cid}','${cm.id}')">✕</button></td>
+      </tr>`;
+    }).join('')}
+    </tbody></table></div>`}
+  </div>`;
+}
+
+function renderMalpracticeTab(cid,p){
+  const items=Object.values(p.malpractice||{});
+  return`<div class="card">
+    <div class="card-header"><span class="card-title">Malpractice Insurance</span>
+      <button class="btn btn-primary btn-sm ml-auto" onclick="openCredItemModal('malpractice','${cid}',null)">+ Add Policy</button></div>
+    ${!items.length?'<div style="padding:40px;text-align:center;color:#94a3b8;font-size:13px">No malpractice policies on file</div>':`
+    <div class="table-wrap"><table><thead><tr>
+      <th>Carrier</th><th>Policy #</th><th>Type</th><th>Coverage</th><th>Effective</th><th>Expiry</th><th style="width:100px"></th>
+    </tr></thead><tbody>
+    ${items.map(m=>`<tr>
+      <td style="font-weight:700">${escHtml(m.carrier||'—')}</td>
+      <td style="font-family:monospace;font-size:12px">${escHtml(m.policy||'—')}</td>
+      <td style="font-size:12px">${escHtml(m.ptype||'—')}</td>
+      <td style="font-size:12px">${escHtml(m.coverage||'—')}</td>
+      <td style="font-size:12px">${fmtDate(m.effective)}</td>
+      <td><div style="display:flex;align-items:center;gap:6px"><span style="font-size:12px">${fmtDate(m.expiry)}</span>${expiryBadge(m.expiry)}</div></td>
+      <td><button class="btn btn-xs btn-secondary" onclick="openCredItemModal('malpractice','${cid}','${m.id}')">Edit</button> <button class="btn btn-xs btn-danger" onclick="deleteCredItem('malpractice','${cid}','${m.id}')">✕</button></td>
+    </tr>`).join('')}
+    </tbody></table></div>`}
+  </div>`;
+}
+
+function renderCredDocsTab(cid,p){
+  const docs=Object.values(p.documents||{});
+  const CATS=['License Certificate','Board Certificate','CME Certificate','Malpractice Certificate','CV / Resume','Government ID','Training Certificate','Other'];
+  const byCat={};CATS.forEach(c=>byCat[c]=[]);
+  docs.forEach(d=>{const k=byCat[d.category]!==undefined?d.category:'Other';byCat[k].push(d);});
+  const used=CATS.filter(c=>byCat[c].length>0);
+  return`<div class="card" style="padding:20px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <span class="card-title">Documents &amp; Files</span>
+      <label class="btn btn-primary btn-sm" style="cursor:pointer">
+        + Upload Files
+        <input type="file" multiple accept="*/*" style="display:none" onchange="handleCredDocUpload(event,'${cid}')">
+      </label>
+    </div>
+    ${!docs.length?`<div style="padding:40px;text-align:center;color:#94a3b8">
+      <div style="font-size:40px;margin-bottom:10px">📁</div>
+      <div style="font-size:14px;font-weight:600;color:#64748b">No documents uploaded yet</div>
+      <div style="font-size:12px;margin-top:4px">Upload licenses, board certificates, CME records, CVs, and more</div>
+    </div>`:`
+    ${used.map(cat=>`
+      <div style="margin-bottom:20px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#64748b;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid #f1f5f9">${cat}</div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          ${byCat[cat].map(d=>{
+            const isImg=d.fileType&&d.fileType.startsWith('image/');
+            const isPdf=d.fileType==='application/pdf';
+            const isDoc=d.name&&(d.name.endsWith('.doc')||d.name.endsWith('.docx'));
+            const icon=isImg?'🖼':isPdf?'📑':isDoc?'📝':'📄';
+            return`<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#f8fafc;border:1px solid var(--border);border-radius:8px">
+              <span style="font-size:20px;flex-shrink:0">${icon}</span>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:13px;font-weight:500;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(d.name)}</div>
+                <div style="font-size:11px;color:#94a3b8">${new Date(d.uploadedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div>
+              </div>
+              <a href="${d.data}" download="${escHtml(d.name)}" class="btn btn-secondary btn-xs" onclick="event.stopPropagation()">↓ Download</a>
+              <button class="btn btn-xs btn-danger" onclick="deleteCredDoc('${cid}','${d.id}')">✕</button>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>`).join('')}
+    `}
+  </div>`;
+}
+
+function handleCredDocUpload(event,cid){
+  const files=Array.from(event.target.files);
+  if(!files.length)return;
+  window._pendingCredFiles={files,cid};
+  document.getElementById('cred-doc-cat-title').textContent=`Uploading ${files.length} file${files.length>1?'s':''}`;
+  openModal('cred-doc-cat-modal');
+  event.target.value='';
+}
+
+function confirmCredDocUpload(){
+  const{files,cid}=window._pendingCredFiles||{};
+  if(!files||!cid)return;
+  const cat=document.getElementById('cred-doc-cat-select').value;
+  const p=gp(cid);
+  if(!p.documents)p.documents={};
+  let loaded=0;
+  files.forEach(file=>{
+    const reader=new FileReader();
+    reader.onload=e=>{
+      const id=credUid();
+      p.documents[id]={id,name:file.name,category:cat,data:e.target.result,fileType:file.type,uploadedAt:Date.now()};
+      loaded++;
+      if(loaded===files.length){
+        saveProviderProfile(cid);
+        closeModal('cred-doc-cat-modal');
+        credTab='documents';renderProviderDetail(cid);
+        toast(`✓ ${files.length} file${files.length>1?'s':''} uploaded`);
+      }
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function deleteCredDoc(cid,docId){
+  if(!confirm('Delete this document?'))return;
+  const p=gp(cid);if(p.documents)delete p.documents[docId];
+  saveProviderProfile(cid);renderProviderDetail(cid);
+}
+
+function deleteCredItem(section,cid,itemId){
+  if(!confirm('Delete this item?'))return;
+  const p=gp(cid);if(p[section])delete p[section][itemId];
+  saveProviderProfile(cid);renderProviderDetail(cid);
+}
+
+function openCredItemModal(type,cid,itemId){
+  const p=gp(cid);
+  const section=type==='cme'?'cme':type+'s';
+  const item=itemId?(p[section]||{})[itemId]:null;
+  const id=itemId||credUid();
+  const v=f=>escHtml((item&&item[f])||'');
+  const STATES=['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC'];
+  const SPECS=['Neurology','Internal Medicine','Critical Care Medicine','Hospitalist Medicine','Emergency Medicine','Family Medicine','Pediatrics','Surgery','Anesthesiology','Psychiatry','Radiology','Other'];
+  let form='';
+  if(type==='license'){form=`
+    <div class="form-row">
+      <div class="form-group"><label>State *</label><select id="ci-state"><option value="">Select...</option>${STATES.map(s=>`<option value="${s}" ${v('state')===s?'selected':''}>${s}</option>`).join('')}</select></div>
+      <div class="form-group"><label>License Number</label><input type="text" id="ci-number" value="${v('number')}" placeholder="e.g. D123456"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>License Type</label><select id="ci-ltype">
+        ${['MD','DO','RN','APRN','PA','Other'].map(t=>`<option value="${t}" ${v('type')===t?'selected':''}>${t}</option>`).join('')}
+      </select></div>
+      <div class="form-group"><label>Status</label><select id="ci-status">
+        ${['Active','Pending','Expired','Suspended'].map(s=>`<option value="${s}" ${v('status')===s?'selected':''}>${s}</option>`).join('')}
+      </select></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Issue Date</label><input type="date" id="ci-issued" value="${v('issued')}"></div>
+      <div class="form-group"><label>Expiry Date</label><input type="date" id="ci-expiry" value="${v('expiry')}"></div>
+    </div>`;}
+  else if(type==='board'){form=`
+    <div class="form-row">
+      <div class="form-group"><label>Specialty *</label><select id="ci-specialty"><option value="">Select...</option>${SPECS.map(s=>`<option value="${s}" ${v('specialty')===s?'selected':''}>${s}</option>`).join('')}</select></div>
+      <div class="form-group"><label>Board Name</label><input type="text" id="ci-boardName" value="${v('boardName')}" placeholder="e.g. ABPN, ABIM, ABEM"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Certification Date</label><input type="date" id="ci-certDate" value="${v('certDate')}"></div>
+      <div class="form-group"><label>MOC / Recert Due</label><input type="date" id="ci-expiry" value="${v('expiry')}"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group full"><label>Status</label><select id="ci-status">
+        ${['Active','Pending','Lapsed'].map(s=>`<option value="${s}" ${v('status')===s?'selected':''}>${s}</option>`).join('')}
+      </select></div>
+    </div>`;}
+  else if(type==='cme'){form=`
+    <div class="form-row">
+      <div class="form-group"><label>Period *</label><input type="text" id="ci-period" value="${v('period')}" placeholder="e.g. 2024–2026"></div>
+      <div class="form-group"><label>Deadline</label><input type="date" id="ci-deadline" value="${v('deadline')}"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Credits Required</label><input type="number" id="ci-required" value="${item&&item.required!=null?item.required:''}" min="0" placeholder="e.g. 50"></div>
+      <div class="form-group"><label>Credits Earned</label><input type="number" id="ci-earned" value="${item&&item.earned!=null?item.earned:0}" min="0"></div>
+    </div>`;}
+  else if(type==='malpractice'){form=`
+    <div class="form-row">
+      <div class="form-group"><label>Carrier *</label><input type="text" id="ci-carrier" value="${v('carrier')}" placeholder="e.g. ProAssurance"></div>
+      <div class="form-group"><label>Policy Number</label><input type="text" id="ci-policy" value="${v('policy')}"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Type</label><select id="ci-ptype">
+        ${['Occurrence','Claims-Made'].map(t=>`<option value="${t}" ${v('ptype')===t?'selected':''}>${t}</option>`).join('')}
+      </select></div>
+      <div class="form-group"><label>Coverage</label><input type="text" id="ci-coverage" value="${v('coverage')}" placeholder="e.g. $1M / $3M"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Effective Date</label><input type="date" id="ci-effective" value="${v('effective')}"></div>
+      <div class="form-group"><label>Expiry Date</label><input type="date" id="ci-expiry" value="${v('expiry')}"></div>
+    </div>`;}
+  const titles={license:'License',board:'Board Certification',cme:'CME Period',malpractice:'Malpractice Policy'};
+  document.getElementById('cred-item-modal-title').textContent=(item?'Edit ':'Add ')+titles[type];
+  document.getElementById('cred-item-modal-body').innerHTML=`<input type="hidden" id="ci-type" value="${type}"><input type="hidden" id="ci-cid" value="${cid}"><input type="hidden" id="ci-id" value="${id}">${form}`;
+  openModal('cred-item-modal');
+}
+
+function saveCredItem(){
+  const type=document.getElementById('ci-type').value;
+  const cid=document.getElementById('ci-cid').value;
+  const id=document.getElementById('ci-id').value;
+  const p=gp(cid);
+  let item={id};
+  if(type==='license'){
+    const state=document.getElementById('ci-state').value;
+    if(!state){toast('State is required');return;}
+    item.state=state;item.number=document.getElementById('ci-number').value.trim();
+    item.type=document.getElementById('ci-ltype').value;item.status=document.getElementById('ci-status').value;
+    item.issued=document.getElementById('ci-issued').value;item.expiry=document.getElementById('ci-expiry').value;
+    if(!p.licenses)p.licenses={};p.licenses[id]=item;
+  }else if(type==='board'){
+    const spec=document.getElementById('ci-specialty').value;
+    if(!spec){toast('Specialty is required');return;}
+    item.specialty=spec;item.boardName=document.getElementById('ci-boardName').value.trim();
+    item.certDate=document.getElementById('ci-certDate').value;item.expiry=document.getElementById('ci-expiry').value;
+    item.status=document.getElementById('ci-status').value;
+    if(!p.boards)p.boards={};p.boards[id]=item;
+  }else if(type==='cme'){
+    const period=document.getElementById('ci-period').value.trim();
+    if(!period){toast('Period is required');return;}
+    item.period=period;item.deadline=document.getElementById('ci-deadline').value;
+    item.required=parseInt(document.getElementById('ci-required').value)||0;
+    item.earned=parseInt(document.getElementById('ci-earned').value)||0;
+    if(!p.cme)p.cme={};p.cme[id]=item;
+  }else if(type==='malpractice'){
+    const carrier=document.getElementById('ci-carrier').value.trim();
+    if(!carrier){toast('Carrier is required');return;}
+    item.carrier=carrier;item.policy=document.getElementById('ci-policy').value.trim();
+    item.ptype=document.getElementById('ci-ptype').value;item.coverage=document.getElementById('ci-coverage').value.trim();
+    item.effective=document.getElementById('ci-effective').value;item.expiry=document.getElementById('ci-expiry').value;
+    if(!p.malpractice)p.malpractice={};p.malpractice[id]=item;
+  }
+  saveProviderProfile(cid);toast('✓ Saved');closeModal('cred-item-modal');renderProviderDetail(cid);
+}
+
+function openCredInfoEdit(cid){
+  const p=gp(cid);
+  document.getElementById('cred-info-modal-body').innerHTML=`
+    <input type="hidden" id="cii-cid" value="${cid}">
+    <div class="form-row">
+      <div class="form-group"><label>NPI Number</label><input type="text" id="cii-npi" value="${escHtml(p.npi||'')}" placeholder="10-digit NPI"></div>
+      <div class="form-group"><label>DEA Number</label><input type="text" id="cii-dea" value="${escHtml(p.deaNumber||'')}" placeholder="e.g. AB1234567"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>DEA Expiry</label><input type="date" id="cii-deaExpiry" value="${p.deaExpiry||''}"></div>
+      <div class="form-group"><label>ECFMG Number</label><input type="text" id="cii-ecfmg" value="${escHtml(p.ecfmgNumber||'')}"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Date of Birth</label><input type="date" id="cii-dob" value="${p.dob||''}"></div>
+      <div class="form-group"><label>SSN Last 4</label><input type="text" id="cii-ssn4" value="${escHtml(p.ssn4||'')}" maxlength="4" placeholder="####"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Medical School</label><input type="text" id="cii-medSchool" value="${escHtml(p.medSchool||'')}"></div>
+      <div class="form-group"><label>Graduation Year</label><input type="text" id="cii-gradYear" value="${escHtml(p.gradYear||'')}" placeholder="YYYY"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group full"><label>Residency / Fellowship</label><input type="text" id="cii-residency" value="${escHtml(p.residency||'')}" placeholder="e.g. Johns Hopkins Neurology Residency 2015–2018"></div>
+    </div>`;
+  openModal('cred-info-modal');
+}
+
+function saveCredInfo(){
+  const cid=document.getElementById('cii-cid').value;
+  const p=gp(cid);
+  p.npi=document.getElementById('cii-npi').value.trim();
+  p.deaNumber=document.getElementById('cii-dea').value.trim();
+  p.deaExpiry=document.getElementById('cii-deaExpiry').value;
+  p.ecfmgNumber=document.getElementById('cii-ecfmg').value.trim();
+  p.dob=document.getElementById('cii-dob').value;
+  p.ssn4=document.getElementById('cii-ssn4').value.trim();
+  p.medSchool=document.getElementById('cii-medSchool').value.trim();
+  p.gradYear=document.getElementById('cii-gradYear').value.trim();
+  p.residency=document.getElementById('cii-residency').value.trim();
+  saveProviderProfile(cid);toast('✓ Provider details saved');closeModal('cred-info-modal');renderProviderDetail(cid);
+}
+
 // ===== TASK TRACKER =====
 let tasksFilter={status:'open',assignee:'',category:'',search:''};
 
@@ -3920,8 +4424,67 @@ function saveTaskFromModal(){
 }
 </script>
 
+<!-- Credentialing: Provider Details Edit Modal -->
+<div id="cred-info-modal" class="modal-overlay hidden" onclick="if(event.target===this)closeModal('cred-info-modal')">
+  <div class="modal" style="max-width:620px">
+    <div class="modal-header">
+      <span class="modal-title">Edit Provider Details</span>
+      <button class="close-btn" onclick="closeModal('cred-info-modal')">✕</button>
+    </div>
+    <div class="modal-body" id="cred-info-modal-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('cred-info-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveCredInfo()">Save Details</button>
+    </div>
+  </div>
+</div>
+
+<!-- Credentialing: Add/Edit License/Board/CME/Malpractice Modal -->
+<div id="cred-item-modal" class="modal-overlay hidden" onclick="if(event.target===this)closeModal('cred-item-modal')">
+  <div class="modal" style="max-width:580px">
+    <div class="modal-header">
+      <span class="modal-title" id="cred-item-modal-title">Add Item</span>
+      <button class="close-btn" onclick="closeModal('cred-item-modal')">✕</button>
+    </div>
+    <div class="modal-body" id="cred-item-modal-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('cred-item-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveCredItem()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Credentialing: Document Category Picker Modal -->
+<div id="cred-doc-cat-modal" class="modal-overlay hidden" onclick="if(event.target===this)closeModal('cred-doc-cat-modal')">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <span class="modal-title" id="cred-doc-cat-title">Upload Files</span>
+      <button class="close-btn" onclick="closeModal('cred-doc-cat-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Document Category</label>
+        <select id="cred-doc-cat-select" style="width:100%">
+          <option value="License Certificate">License Certificate</option>
+          <option value="Board Certificate">Board Certificate</option>
+          <option value="CME Certificate">CME Certificate</option>
+          <option value="Malpractice Certificate">Malpractice Certificate</option>
+          <option value="CV / Resume">CV / Resume</option>
+          <option value="Government ID">Government ID</option>
+          <option value="Training Certificate">Training Certificate</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('cred-doc-cat-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmCredDocUpload()">Upload</button>
+    </div>
+  </div>
+</div>
+
 <!-- Task Tracker Modal -->
-<div id="task-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeModal('task-modal')">
+<div id="task-modal" class="modal-overlay hidden" onclick="if(event.target===this)closeModal('task-modal')">
   <div class="modal" style="max-width:680px">
     <div class="modal-header">
       <span class="modal-title" id="task-modal-title">New Task</span>
