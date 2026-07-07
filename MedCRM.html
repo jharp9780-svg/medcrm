@@ -265,6 +265,10 @@ td:hover .ie-hint{color:#93c5fd}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Task Tracker
         <span class="nav-count" id="nav-count-tasks" style="display:none">0</span>
       </div>
+      <div class="nav-item" onclick="showView('tminus')" id="nav-tminus">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L8 8H4l4 4-1.5 6L12 15l5.5 3L16 12l4-4h-4z"/></svg>T-Minus
+        <span class="nav-count" id="nav-count-tminus" style="display:none">0</span>
+      </div>
     </div>
     <div class="nav-section" style="border-top:1px solid #334155">
       <div class="nav-label">Prospecting</div>
@@ -728,7 +732,7 @@ const _auth    = firebase.auth();
 const _db      = firebase.database();
 const _storage = firebase.storage();
 
-let contacts=[], activities=[], documents=[], crmTasks=[], credentialing={};
+let contacts=[], activities=[], documents=[], crmTasks=[], credentialing={}, tminusLaunches=[];
 let hospitalList=['Avel','Baptist Memorial','BayCare','Boston Medical Center','Comanche County Memorial Hospital','Cone','Froedtert','Glenwood','Holy Family','Medical Center of Southeast Texas','Mercy vICU','Mercy EEG on Call','Mercy Teleneurology','Mercy vHospitalist','Mercy Virtual Nursing','Ochsner','Orlando Health','OSF','Remote Seat 1','Sentara','TCH','UCHealth','UK','Valley View Hospital'];
 function saveHospitalList(){_db.ref('hospitalList').set(hospitalList);}
 let _dupCache=null;
@@ -844,12 +848,13 @@ _auth.onAuthStateChanged(async user=>{
   }
 
   // Load activities and documents in background, then render once with everything
-  const [aSnap,dSnap,tSnap,crSnap,hlSnap]=await Promise.all([
+  const [aSnap,dSnap,tSnap,crSnap,hlSnap,tmSnap]=await Promise.all([
     _db.ref('activities').once('value'),
     _db.ref('documents').once('value'),
     _db.ref('crmtasks').once('value'),
     _db.ref('credentialing').once('value'),
-    _db.ref('hospitalList').once('value')
+    _db.ref('hospitalList').once('value'),
+    _db.ref('tminusLaunches').once('value')
   ]);
   activities=toArr(aSnap.val());
   documents=toArr(dSnap.val());
@@ -857,6 +862,7 @@ _auth.onAuthStateChanged(async user=>{
   credentialing=crSnap.val()||{};
   const hlVal=hlSnap.val();
   if(Array.isArray(hlVal)&&hlVal.length) hospitalList=hlVal;
+  tminusLaunches=toArr(tmSnap.val());
   render();
   autoImportSfNotes();
 });
@@ -919,6 +925,7 @@ function render(){
   else if(currentView==='activity') renderActivity();
   else if(currentView==='dedup') renderDedup();
   else if(currentView==='tasks') renderTasks();
+  else if(currentView==='tminus') renderTMinus();
   else if(currentView==='credentialing') renderCredentialing();
   else if(currentView==='crmstats') renderCRMStats();
 }
@@ -4654,6 +4661,152 @@ function saveCrmTaskById(id){
   updateNavCounts();
 }
 
+// ─── T-MINUS ────────────────────────────────────────────────────
+const TMINUS_TEMPLATE=[
+  {txDays:-75,task:'Office lease signing',owner:'Eli'},
+  {txDays:-75,task:'Line ordering',owner:'Eli'},
+  {txDays:-21,task:'Electrical cabling – quality and layout checked',owner:'Nir'},
+  {txDays:-21,task:'Onsite equipment readiness',owner:'Eli'},
+  {txDays:-21,task:'All Usernames and Passwords Issued',owner:'Eli'},
+  {txDays:-21,task:'All Usernames and Passwords Checked',owner:'Nir'},
+  {txDays:-14,task:'Main line delivery',owner:'Eli'},
+  {txDays:-14,task:'Backup line delivery',owner:'Eli'},
+  {txDays:-14,task:'Main line – completion of quality testing',owner:'Nir'},
+  {txDays:-14,task:'Backup line – completion of quality testing',owner:'Nir'},
+  {txDays:-14,task:'Check of UPS/Generator Readiness',owner:'Nir'},
+  {txDays:-14,task:'Phone testing-Main and Back-Up',owner:'Nir'},
+  {txDays:-14,task:'Main Station - IT applications quality check',owner:'Nir'},
+  {txDays:-14,task:'Backup Station - IT applications quality check',owner:'Nir'},
+];
+
+function saveTmLaunch(launch){
+  const idx=tminusLaunches.findIndex(x=>x.id===launch.id);
+  if(idx>=0) _db.ref('tminusLaunches/'+idx).set(launch);
+}
+
+function toggleTmTask(launchId,taskId){
+  const launch=tminusLaunches.find(x=>x.id===launchId);
+  if(!launch) return;
+  const tasks=toArr(launch.tasks);
+  const task=tasks.find(x=>x.id===taskId);
+  if(!task) return;
+  task.done=!task.done;
+  launch.tasks=tasks;
+  saveTmLaunch(launch);
+  renderTMinus();
+}
+
+function openNewLaunchModal(){
+  document.getElementById('nl-doctor').value='';
+  document.getElementById('nl-hospital').value='';
+  document.getElementById('nl-date').value='';
+  document.getElementById('nl-note').value='';
+  document.getElementById('new-launch-modal').style.display='flex';
+}
+
+function saveNewLaunch(){
+  const doctor=document.getElementById('nl-doctor').value.trim();
+  const hospital=document.getElementById('nl-hospital').value.trim();
+  const dateVal=document.getElementById('nl-date').value.trim();
+  const note=document.getElementById('nl-note').value.trim()||'1st Shift';
+  if(!doctor||!dateVal){toast('Doctor name and launch date are required');return;}
+  const launchDate=new Date(dateVal+'T00:00:00');
+  const doctorEvent=hospital?`${doctor} - ${hospital}`:doctor;
+  const tasks=TMINUS_TEMPLATE.map((t,i)=>{
+    const due=new Date(launchDate);
+    due.setDate(due.getDate()+t.txDays);
+    return{id:'tm_'+Date.now()+'_'+i,task:t.task,txDays:t.txDays,dueDate:due.toISOString().slice(0,10),owner:t.owner,done:false,notes:''};
+  });
+  const launch={id:'tl_'+Date.now(),doctorEvent,launchDate:dateVal,launchNote:note,tasks,createdAt:Date.now()};
+  tminusLaunches.push(launch);
+  const idx=tminusLaunches.length-1;
+  _db.ref('tminusLaunches/'+idx).set(launch);
+  document.getElementById('new-launch-modal').style.display='none';
+  toast('✓ Launch added for '+doctorEvent);
+  renderTMinus();
+}
+
+function renderTMinus(){
+  const el=document.getElementById('main-content');
+  if(!el) return;
+  const today=new Date(); today.setHours(0,0,0,0);
+
+  const sorted=[...tminusLaunches].sort((a,b)=>{
+    if(!a.launchDate) return 1; if(!b.launchDate) return -1;
+    return new Date(a.launchDate)-new Date(b.launchDate);
+  });
+  const upcoming=sorted.filter(l=>!l.launchDate||new Date(l.launchDate+'T00:00:00')>=today);
+  const past=sorted.filter(l=>l.launchDate&&new Date(l.launchDate+'T00:00:00')<today);
+
+  function launchCard(l,isPast){
+    const tasks=toArr(l.tasks);
+    const total=tasks.length;
+    const done=tasks.filter(t=>t.done).length;
+    const pct=total?Math.round(done/total*100):0;
+    const ld=l.launchDate?new Date(l.launchDate+'T00:00:00'):null;
+    const daysUntil=ld?Math.round((ld-today)/(1000*60*60*24)):null;
+    const urgentColor=daysUntil!==null&&daysUntil<=14&&!isPast?'#dc2626':daysUntil!==null&&daysUntil<=30&&!isPast?'#f59e0b':'#10b981';
+    const countdownStr=daysUntil===null?'':`T${daysUntil>=0?'-':'+'+(Math.abs(daysUntil)+'').replace('-','')}${Math.abs(daysUntil)}`;
+    // group tasks by txDays
+    const groups={};
+    tasks.forEach(t=>{const k=t.txDays||0;if(!groups[k])groups[k]=[];groups[k].push(t);});
+    const groupKeys=Object.keys(groups).sort((a,b)=>a-b);
+    const groupHtml=groupKeys.map(k=>{
+      const gTasks=groups[k];
+      const label=k==0?'Launch Day':`T${k} (${Math.abs(k)} days before)`;
+      const allDone=gTasks.every(t=>t.done);
+      return `<div style="margin-bottom:12px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#64748b;letter-spacing:.05em;margin-bottom:6px">${label}</div>
+        ${gTasks.map(t=>`
+          <div style="display:flex;align-items:flex-start;gap:10px;padding:7px 10px;border-radius:7px;background:${t.done?'#f0fdf4':'#f8fafc'};margin-bottom:4px;cursor:pointer" onclick="toggleTmTask('${l.id}','${t.id}')">
+            <div style="width:18px;height:18px;border-radius:50%;border:2px solid ${t.done?'#10b981':'#cbd5e1'};background:${t.done?'#10b981':'#fff'};flex-shrink:0;display:flex;align-items:center;justify-content:center;margin-top:1px">
+              ${t.done?'<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>':''}
+            </div>
+            <div style="flex:1;min-width:0">
+              <span style="font-size:13px;color:${t.done?'#64748b':'#1e293b'};${t.done?'text-decoration:line-through':''}">${escHtml(t.task)}</span>
+              <span style="font-size:11px;color:#94a3b8;margin-left:8px">${t.dueDate?new Date(t.dueDate+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}):''}</span>
+            </div>
+            <span style="font-size:11px;color:#64748b;flex-shrink:0;background:#e2e8f0;border-radius:4px;padding:1px 6px">${escHtml(t.owner||'')}</span>
+          </div>`).join('')}
+      </div>`;
+    }).join('');
+
+    return `<div style="background:#fff;border-radius:12px;border:1px solid ${isPast?'#e2e8f0':'#e0f2fe'};padding:20px;margin-bottom:16px;${isPast?'opacity:0.7':''}">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="font-size:16px;font-weight:700;color:#0f172a">${escHtml(l.doctorEvent)}</div>
+          <div style="font-size:13px;color:#64748b;margin-top:2px">${escHtml(l.launchNote||'')}${ld?' · '+ld.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}):''}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          ${!isPast&&daysUntil!==null?`<div style="font-size:22px;font-weight:800;color:${urgentColor}">${daysUntil===0?'TODAY!':countdownStr}</div><div style="font-size:11px;color:#94a3b8">${daysUntil>0?'days to launch':daysUntil===0?'launch day':'days past'}</div>`:''}
+          ${isPast?`<span style="background:#dcfce7;color:#15803d;font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px">Launched</span>`:''}
+        </div>
+      </div>
+      <div style="margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:#64748b;margin-bottom:4px"><span>${done}/${total} tasks complete</span><span>${pct}%</span></div>
+        <div style="height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${pct===100?'#10b981':'#3b82f6'};border-radius:3px;transition:width .3s"></div></div>
+      </div>
+      <details style="cursor:pointer"><summary style="font-size:13px;color:#3b82f6;font-weight:500;list-style:none;user-select:none">▸ ${total} prep tasks</summary>
+        <div style="margin-top:12px">${groupHtml}</div>
+      </details>
+    </div>`;
+  }
+
+  el.innerHTML=`
+    <div style="max-width:860px;margin:0 auto;padding:24px 20px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px">
+        <div>
+          <h2 style="margin:0;font-size:22px;font-weight:700;color:#0f172a">🚀 T-Minus</h2>
+          <p style="margin:4px 0 0;color:#64748b;font-size:14px">Doctor launch preparation tracker</p>
+        </div>
+        <button class="btn btn-primary" onclick="openNewLaunchModal()">+ New Launch</button>
+      </div>
+      ${upcoming.length?`<h3 style="font-size:13px;font-weight:700;text-transform:uppercase;color:#64748b;letter-spacing:.05em;margin:0 0 12px">Upcoming (${upcoming.length})</h3>${upcoming.map(l=>launchCard(l,false)).join('')}`:'<p style="color:#94a3b8;text-align:center;padding:40px 0">No upcoming launches. Add one with + New Launch.</p>'}
+      ${past.length?`<h3 style="font-size:13px;font-weight:700;text-transform:uppercase;color:#94a3b8;letter-spacing:.05em;margin:24px 0 12px">Past Launches (${past.length})</h3>${past.map(l=>launchCard(l,true)).join('')}`:''}
+    </div>`;
+}
+// ─── END T-MINUS ───────────────────────────────────────────────
+
 function renderTasks(){
   const STATUSES={
     todo:{label:'To Do',color:'#64748b',bg:'#f1f5f9'},
@@ -5373,6 +5526,31 @@ function saveTaskFromModal(){
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('add-provider-modal')">Cancel</button>
       <button class="btn btn-primary" onclick="saveNewProvider()">Add Provider</button>
+    </div>
+  </div>
+</div>
+
+<!-- New Launch Modal -->
+<div id="new-launch-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center" onclick="if(event.target===this)this.style.display='none'">
+  <div style="background:#fff;border-radius:12px;padding:28px;width:440px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <h3 style="margin:0;font-size:16px;font-weight:700;color:#0f172a">🚀 New Doctor Launch</h3>
+      <button onclick="document.getElementById('new-launch-modal').style.display='none'" style="background:none;border:none;font-size:20px;cursor:pointer;color:#64748b">×</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div><label style="font-size:12px;font-weight:600;color:#475569;display:block;margin-bottom:4px">Doctor Name *</label>
+        <input id="nl-doctor" placeholder="e.g. Anton Dela Cruz" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:7px;font-size:14px;outline:none;box-sizing:border-box" onfocus="this.style.borderColor='#93c5fd'" onblur="this.style.borderColor='var(--border)'"></div>
+      <div><label style="font-size:12px;font-weight:600;color:#475569;display:block;margin-bottom:4px">Hospital / Program</label>
+        <input id="nl-hospital" placeholder="e.g. Mercy Teleneurology" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:7px;font-size:14px;outline:none;box-sizing:border-box" onfocus="this.style.borderColor='#93c5fd'" onblur="this.style.borderColor='var(--border)'"></div>
+      <div><label style="font-size:12px;font-weight:600;color:#475569;display:block;margin-bottom:4px">Launch Date (First Shift) *</label>
+        <input id="nl-date" type="date" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:7px;font-size:14px;outline:none;box-sizing:border-box" onfocus="this.style.borderColor='#93c5fd'" onblur="this.style.borderColor='var(--border)'"></div>
+      <div><label style="font-size:12px;font-weight:600;color:#475569;display:block;margin-bottom:4px">Launch Note</label>
+        <input id="nl-note" placeholder="e.g. 1st Mercy Shift" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:7px;font-size:14px;outline:none;box-sizing:border-box" onfocus="this.style.borderColor='#93c5fd'" onblur="this.style.borderColor='var(--border)'"></div>
+      <p style="margin:0;font-size:12px;color:#94a3b8">14 prep tasks will be auto-generated at T-75, T-21, and T-14 intervals.</p>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:22px">
+      <button class="btn btn-secondary" onclick="document.getElementById('new-launch-modal').style.display='none'">Cancel</button>
+      <button class="btn btn-primary" onclick="saveNewLaunch()">🚀 Create Launch</button>
     </div>
   </div>
 </div>
