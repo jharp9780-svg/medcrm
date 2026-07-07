@@ -3651,8 +3651,9 @@ function deleteNote(contactId,ts){
 }
 
 // ===== CREDENTIALING MODULE =====
-let credView=null; // null=list, contactId=detail
+let credView=null;    // null=list/hub, contactId=detail
 let credTab='info';
+let credSection=null; // null=hub, 'providers'=provider list (with optional filter)
 
 function saveProviderProfile(cid){_db.ref('credentialing/'+cid).set(credentialing[cid]||null);updateNavCounts();}
 function gp(cid){if(!credentialing[cid])credentialing[cid]={};return credentialing[cid];}
@@ -3678,13 +3679,177 @@ function credProviderStatus(cid){
 
 function renderCredentialing(){
   if(credView){renderProviderDetail(credView);return;}
-  const showFormer=(document.getElementById('cred-show-former')||{}).checked||false;
+  if(credSection==='providers'){renderCredProviderList();return;}
+  if(credSection==='expiring'){renderCredExpiryList();return;}
+  if(credSection==='tasks'){renderCredTasks();return;}
+  if(credSection==='documents'){renderCredDocsBrowser();return;}
+  renderCredHub();
+}
+
+function renderCredTasks(){
+  // Embedded task tracker within credentialing portal
+  const STATUSES={todo:{label:'To Do',color:'#64748b',bg:'#f1f5f9'},inprogress:{label:'In Progress',color:'#2563eb',bg:'#dbeafe'},blocked:{label:'Blocked',color:'#dc2626',bg:'#fee2e2'},done:{label:'Done',color:'#16a34a',bg:'#dcfce7'}};
+  const now=new Date();
+  const open=crmTasks.filter(t=>t.status!=='done').sort((a,b)=>{
+    if(a.dueDate&&b.dueDate)return new Date(a.dueDate)-new Date(b.dueDate);
+    if(a.dueDate)return -1;if(b.dueDate)return 1;return 0;
+  });
+  const done=crmTasks.filter(t=>t.status==='done').sort((a,b)=>(b.doneAt||0)-(a.doneAt||0)).slice(0,10);
+  const PALETTE=['#2563eb','#7c3aed','#059669','#d97706','#db2777','#0891b2'];
+  const allAssignees=[...new Set(crmTasks.map(t=>t.assignee).filter(Boolean))];
+  const ac=a=>PALETTE[allAssignees.indexOf(a)%PALETTE.length]||'#64748b';
+
+  const renderRows=list=>list.map(t=>{
+    const st=STATUSES[t.status]||STATUSES.todo;
+    const isOverdue=t.status!=='done'&&t.dueDate&&new Date(t.dueDate)<now;
+    const dueStr=t.dueDate?new Date(t.dueDate+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}):'—';
+    const ini=(t.assignee||'?').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
+    return`<tr class="clickable" onclick="openTaskModal('${t.id}')" style="${t.status==='done'?'opacity:0.5':''}">
+      <td onclick="event.stopPropagation();quickToggleDone('${t.id}')">
+        <div class="task-check${t.status==='done'?' done':''}" title="${t.status==='done'?'Reopen':'Mark done'}">
+          ${t.status==='done'?'<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>':''}
+        </div>
+      </td>
+      <td style="font-weight:600">${escHtml(t.contactName||'—')}</td>
+      <td>${escHtml(t.title)}</td>
+      <td><span class="badge" style="background:${st.bg};color:${st.color};font-size:10px">${st.label}</span></td>
+      <td>${t.assignee?`<div style="display:flex;align-items:center;gap:6px"><div style="width:24px;height:24px;border-radius:50%;background:${ac(t.assignee)};color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center">${ini}</div><span style="font-size:12px">${escHtml(t.assignee.split(' ')[0])}</span></div>`:'—'}</td>
+      <td style="font-size:12px;font-weight:${isOverdue?700:400};color:${isOverdue?'#dc2626':'#374151'}">${isOverdue?'⚠ ':''}${dueStr}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('content').innerHTML=`
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+      <button class="btn btn-secondary btn-sm" onclick="credSection=null;renderCredentialing()">← Home</button>
+      <h2 style="font-size:18px;font-weight:700;color:#1e293b">Task Tracker</h2>
+      <button class="btn btn-primary btn-sm ml-auto" onclick="openTaskModal(null)">+ New Task</button>
+    </div>
+    ${open.length?`<div class="card" style="margin-bottom:16px">
+      <div class="card-header"><span class="card-title">Open Tasks (${open.length})</span></div>
+      <div class="table-wrap"><table><thead><tr><th style="width:36px"></th><th>Doctor</th><th>Task</th><th>Status</th><th>Assignee</th><th>Due</th></tr></thead>
+      <tbody>${renderRows(open)}</tbody></table></div>
+    </div>`:'<div class="card" style="padding:40px;text-align:center;color:#16a34a;margin-bottom:16px"><div style="font-size:32px;margin-bottom:8px">✓</div><div style="font-weight:600">No open tasks</div></div>'}
+    ${done.length?`<div class="card">
+      <div class="card-header"><span class="card-title" style="color:#94a3b8">Recently Completed</span></div>
+      <div class="table-wrap"><table><thead><tr><th style="width:36px"></th><th>Doctor</th><th>Task</th><th>Status</th><th>Assignee</th><th>Due</th></tr></thead>
+      <tbody>${renderRows(done)}</tbody></table></div>
+    </div>`:''}`;
+}
+
+function renderCredHub(){
+  const hiredProviders=contacts.filter(c=>c.name&&c.stage==='Hired');
+  const formerProviders=contacts.filter(c=>c.name&&c.stage==='Former');
+
+  // Collect all expiring items across all hired providers
+  const urgentItems=[];
+  hiredProviders.forEach(c=>{
+    const p=credentialing[c.id]||{};
+    const check=(label,expiry)=>{
+      const d=daysUntil(expiry);
+      if(d!==null&&d<=90) urgentItems.push({name:c.name,cid:c.id,label,expiry,days:d});
+    };
+    Object.values(p.licenses||{}).forEach(l=>check((l.state||'?')+' License',l.expiry));
+    Object.values(p.boards||{}).forEach(b=>check((b.specialty||'?')+' Board',b.expiry));
+    Object.values(p.malpractice||{}).forEach(m=>check('Malpractice ('+( m.carrier||'?')+')',m.expiry));
+    if(p.deaExpiry) check('DEA Certificate',p.deaExpiry);
+  });
+  urgentItems.sort((a,b)=>a.days-b.days);
+
+  const expiredN=urgentItems.filter(x=>x.days<0).length;
+  const soonN=urgentItems.filter(x=>x.days>=0).length;
+
+  const openTasks=crmTasks.filter(t=>t.status!=='done');
+  const totalDocs=hiredProviders.reduce((sum,c)=>sum+Object.keys((credentialing[c.id]||{}).documents||{}).length,0);
+
+  document.getElementById('content').innerHTML=`
+    <div style="margin-bottom:32px">
+      <h2 style="font-size:24px;font-weight:800;color:#1e293b">Credentialing Portal</h2>
+      <p style="font-size:14px;color:#64748b;margin-top:4px">Manage provider credentials, tasks, and documents</p>
+    </div>
+
+    <!-- Main navigation tiles -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-bottom:32px">
+
+      <div onclick="credSection='providers';renderCredentialing()" style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:28px 24px;cursor:pointer;transition:all .18s;border-top:4px solid #2563eb" onmouseover="this.style.boxShadow='0 6px 24px rgba(37,99,235,.12)';this.style.transform='translateY(-2px)'" onmouseout="this.style.boxShadow='';this.style.transform=''">
+        <div style="width:48px;height:48px;border-radius:12px;background:#eff6ff;display:flex;align-items:center;justify-content:center;margin-bottom:14px">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        </div>
+        <div style="font-size:17px;font-weight:700;color:#1e293b;margin-bottom:4px">Provider Profiles</div>
+        <div style="font-size:13px;color:#64748b;margin-bottom:12px">Licenses, boards, CME &amp; malpractice per doctor</div>
+        <div style="font-size:13px;font-weight:600;color:#2563eb">${hiredProviders.length} active provider${hiredProviders.length!==1?'s':''} →</div>
+      </div>
+
+      <div onclick="credSection='expiring';renderCredentialing()" style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:28px 24px;cursor:pointer;transition:all .18s;border-top:4px solid ${expiredN?'#dc2626':'#d97706'}" onmouseover="this.style.boxShadow='0 6px 24px rgba(220,38,38,.1)';this.style.transform='translateY(-2px)'" onmouseout="this.style.boxShadow='';this.style.transform=''">
+        <div style="width:48px;height:48px;border-radius:12px;background:${expiredN?'#fee2e2':'#fef3c7'};display:flex;align-items:center;justify-content:center;margin-bottom:14px">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${expiredN?'#dc2626':'#d97706'}" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        </div>
+        <div style="font-size:17px;font-weight:700;color:#1e293b;margin-bottom:4px">Expiring Credentials</div>
+        <div style="font-size:13px;color:#64748b;margin-bottom:12px">Track what needs renewal in the next 90 days</div>
+        <div style="font-size:13px;font-weight:600;color:${expiredN?'#dc2626':'#d97706'}">${expiredN?expiredN+' expired':''}${expiredN&&soonN?' · ':''}${soonN?soonN+' expiring soon':(!expiredN?'All credentials current':'')} →</div>
+      </div>
+
+      <div onclick="credSection='tasks';renderCredentialing()" style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:28px 24px;cursor:pointer;transition:all .18s;border-top:4px solid #7c3aed" onmouseover="this.style.boxShadow='0 6px 24px rgba(124,58,237,.12)';this.style.transform='translateY(-2px)'" onmouseout="this.style.boxShadow='';this.style.transform=''">
+        <div style="width:48px;height:48px;border-radius:12px;background:#f5f3ff;display:flex;align-items:center;justify-content:center;margin-bottom:14px">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        </div>
+        <div style="font-size:17px;font-weight:700;color:#1e293b;margin-bottom:4px">Task Tracker</div>
+        <div style="font-size:13px;color:#64748b;margin-bottom:12px">Credentialing, licensing &amp; onboarding tasks</div>
+        <div style="font-size:13px;font-weight:600;color:#7c3aed">${openTasks.length} open task${openTasks.length!==1?'s':''} →</div>
+      </div>
+
+      <div onclick="credSection='documents';renderCredentialing()" style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:28px 24px;cursor:pointer;transition:all .18s;border-top:4px solid #059669" onmouseover="this.style.boxShadow='0 6px 24px rgba(5,150,105,.1)';this.style.transform='translateY(-2px)'" onmouseout="this.style.boxShadow='';this.style.transform=''">
+        <div style="width:48px;height:48px;border-radius:12px;background:#f0fdf4;display:flex;align-items:center;justify-content:center;margin-bottom:14px">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        </div>
+        <div style="font-size:17px;font-weight:700;color:#1e293b;margin-bottom:4px">Documents</div>
+        <div style="font-size:13px;color:#64748b;margin-bottom:12px">All uploaded certificates, CVs &amp; IDs</div>
+        <div style="font-size:13px;font-weight:600;color:#059669">${totalDocs} file${totalDocs!==1?'s':''} stored →</div>
+      </div>
+
+    </div>
+
+    <!-- Urgent alerts -->
+    ${urgentItems.length?`
+    <div class="card" style="padding:20px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div style="font-size:14px;font-weight:700;color:#1e293b">⚠ Needs Attention</div>
+        <button class="btn btn-secondary btn-sm" onclick="credSection='expiring';renderCredentialing()">View All</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${urgentItems.slice(0,6).map(item=>{
+          const bg=item.days<0?'#fee2e2':item.days<=30?'#fff7ed':'#fefce8';
+          const col=item.days<0?'#dc2626':item.days<=30?'#c2410c':'#a16207';
+          const lbl=item.days<0?`Expired ${Math.abs(item.days)}d ago`:item.days===0?'Expires today':`${item.days}d left`;
+          return`<div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:${bg};border-radius:8px;cursor:pointer" onclick="openProviderProfile('${item.cid}')">
+            <div style="flex:1;min-width:0">
+              <span style="font-weight:600;color:#1e293b">${escHtml(item.name)}</span>
+              <span style="color:#64748b;font-size:12px;margin-left:8px">${escHtml(item.label)}</span>
+            </div>
+            <div style="font-size:12px;color:#94a3b8">${fmtDate(item.expiry)}</div>
+            <div style="font-size:11px;font-weight:700;color:${col};min-width:90px;text-align:right">${lbl}</div>
+          </div>`;
+        }).join('')}
+        ${urgentItems.length>6?`<div style="text-align:center;font-size:12px;color:#64748b;padding:4px">+${urgentItems.length-6} more — <span style="color:var(--blue);cursor:pointer" onclick="credSection='expiring';renderCredentialing()">View all</span></div>`:''}
+      </div>
+    </div>`:''}
+
+    ${formerProviders.length?`
+    <div style="margin-top:20px;padding:14px 18px;background:#f8fafc;border:1px solid var(--border);border-radius:10px;display:flex;align-items:center;gap:12px">
+      <div style="flex:1;font-size:13px;color:#64748b">${formerProviders.length} former employee${formerProviders.length!==1?'s':''} — records archived</div>
+      <button class="btn btn-secondary btn-sm" onclick="credSection='providers';_credShowFormer=true;renderCredentialing()">View Former</button>
+    </div>`:''}`;
+}
+
+function renderCredProviderList(){
+  const showFormer=window._credShowFormer||false;
+  window._credShowFormer=false; // reset after one use
   const providers=contacts.filter(c=>c.name&&(c.stage==='Hired'||(showFormer&&c.stage==='Former'))).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
   const expiredCount=providers.filter(p=>credProviderStatus(p.id)==='expired').length;
   const soonCount=providers.filter(p=>credProviderStatus(p.id)==='soon').length;
 
   const searchVal=(document.getElementById('cred-search')||{}).value||'';
   const filterVal=(document.getElementById('cred-status-filter')||{}).value||'all';
+  const showFormerCb=(document.getElementById('cred-show-former')||{}).checked||showFormer;
   let filtered=providers.filter(p=>{
     if(searchVal&&!(p.name||'').toLowerCase().includes(searchVal.toLowerCase()))return false;
     const st=credProviderStatus(p.id);
@@ -3694,28 +3859,28 @@ function renderCredentialing(){
   });
 
   document.getElementById('content').innerHTML=`
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-      <div><h2 style="font-size:20px;font-weight:700;color:#1e293b">Credentialing</h2>
-      <p style="font-size:13px;color:#64748b;margin-top:2px">Licenses, boards, CME &amp; documents per provider</p></div>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+      <button class="btn btn-secondary btn-sm" onclick="credSection=null;credView=null;renderCredentialing()">← Home</button>
+      <div><h2 style="font-size:18px;font-weight:700;color:#1e293b">Provider Profiles</h2></div>
     </div>
     <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px">
-      <div class="stat-card"><div class="stat-label">Providers</div><div class="stat-value stat-blue">${providers.length}</div><div class="stat-sub">total</div></div>
-      <div class="stat-card"><div class="stat-label">Expired Items</div><div class="stat-value stat-red">${expiredCount}</div><div class="stat-sub">need renewal</div></div>
-      <div class="stat-card"><div class="stat-label">Expiring Soon</div><div class="stat-value stat-amber">${soonCount}</div><div class="stat-sub">within 90 days</div></div>
-      <div class="stat-card"><div class="stat-label">Up to Date</div><div class="stat-value stat-green">${providers.length-expiredCount-soonCount}</div><div class="stat-sub">providers</div></div>
+      <div class="stat-card"><div class="stat-label">Active Providers</div><div class="stat-value stat-blue">${providers.filter(p=>p.stage==='Hired').length}</div></div>
+      <div class="stat-card"><div class="stat-label">Expired Items</div><div class="stat-value stat-red">${expiredCount}</div></div>
+      <div class="stat-card"><div class="stat-label">Expiring Soon</div><div class="stat-value stat-amber">${soonCount}</div></div>
+      <div class="stat-card"><div class="stat-label">Up to Date</div><div class="stat-value stat-green">${providers.length-expiredCount-soonCount}</div></div>
     </div>
     <div class="filter-bar" style="margin-bottom:16px">
       <input type="text" id="cred-search" placeholder="Search providers..." value="${escHtml(searchVal)}"
-        oninput="renderCredentialing()" style="padding:7px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;outline:none;width:220px">
-      <select class="filter-select" id="cred-status-filter" onchange="renderCredentialing()">
-        <option value="all" ${filterVal==='all'?'selected':''}>All Providers</option>
+        oninput="renderCredProviderList()" style="padding:7px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;outline:none;width:220px">
+      <select class="filter-select" id="cred-status-filter" onchange="renderCredProviderList()">
+        <option value="all" ${filterVal==='all'?'selected':''}>All</option>
         <option value="expiring" ${filterVal==='expiring'?'selected':''}>Expiring / Expired</option>
         <option value="expired" ${filterVal==='expired'?'selected':''}>Expired Only</option>
       </select>
-      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#64748b;cursor:pointer;margin-left:4px">
-        <input type="checkbox" id="cred-show-former" ${showFormer?'checked':''} onchange="renderCredentialing()"> Show Former
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#64748b;cursor:pointer">
+        <input type="checkbox" id="cred-show-former" ${showFormerCb?'checked':''} onchange="renderCredProviderList()"> Show Former
       </label>
-      <span style="font-size:12px;color:#64748b;margin-left:4px">${filtered.length} provider${filtered.length!==1?'s':''}</span>
+      <span style="font-size:12px;color:#64748b">${filtered.length} provider${filtered.length!==1?'s':''}</span>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px">
       ${filtered.map(c=>{
@@ -3725,16 +3890,15 @@ function renderCredentialing(){
         const docN=Object.keys(p.documents||{}).length;
         const st=credProviderStatus(c.id);
         const dot=st==='expired'?'#dc2626':st==='soon'?'#d97706':'#16a34a';
-        const dotTitle=st==='expired'?'Has expired items':st==='soon'?'Expiring within 90 days':'All credentials current';
         const ini=(c.name||'?').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
-        return`<div class="card" style="padding:16px;cursor:pointer;transition:box-shadow .15s" onclick="openProviderProfile('${c.id}')" onmouseover="this.style.boxShadow='0 4px 16px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow=''">
+        return`<div class="card" style="padding:16px;cursor:pointer;transition:box-shadow .15s${c.stage==='Former'?';opacity:.65':''}" onclick="openProviderProfile('${c.id}')" onmouseover="this.style.boxShadow='0 4px 16px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow=''">
           <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
             <div style="width:42px;height:42px;border-radius:50%;background:${avatarBg(c.name)};color:#fff;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${ini}</div>
             <div style="flex:1;min-width:0">
               <div style="font-weight:700;color:#1e293b;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(c.name)}</div>
-              <div style="font-size:11px;color:#64748b">${escHtml(c.specialty||c.type||'Provider')}</div>
+              <div style="font-size:11px;color:#64748b">${escHtml(c.specialty||c.type||'Provider')}${c.stage==='Former'?' · <span style="color:#94a3b8">Former</span>':''}</div>
             </div>
-            <div style="width:10px;height:10px;border-radius:50%;background:${dot};flex-shrink:0" title="${dotTitle}"></div>
+            <div style="width:10px;height:10px;border-radius:50%;background:${dot};flex-shrink:0"></div>
           </div>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
             ${p.npi?`<span class="badge badge-blue" style="font-size:10px">NPI ${escHtml(p.npi)}</span>`:''}
@@ -3744,6 +3908,96 @@ function renderCredentialing(){
           </div>
         </div>`;
       }).join('')}
+    </div>`;
+}
+
+function renderCredExpiryList(){
+  const hiredProviders=contacts.filter(c=>c.name&&c.stage==='Hired');
+  const items=[];
+  hiredProviders.forEach(c=>{
+    const p=credentialing[c.id]||{};
+    const check=(label,expiry,tab)=>{
+      const d=daysUntil(expiry);
+      if(d!==null&&d<=90) items.push({name:c.name,cid:c.id,label,expiry,days:d,tab});
+    };
+    Object.values(p.licenses||{}).forEach(l=>check((l.state||'?')+' License',l.expiry,'licenses'));
+    Object.values(p.boards||{}).forEach(b=>check((b.specialty||'?')+' Board',b.expiry,'boards'));
+    Object.values(p.malpractice||{}).forEach(m=>check('Malpractice ('+(m.carrier||'?')+')',m.expiry,'malpractice'));
+    if(p.deaExpiry) check('DEA Certificate',p.deaExpiry,'info');
+  });
+  items.sort((a,b)=>a.days-b.days);
+
+  document.getElementById('content').innerHTML=`
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+      <button class="btn btn-secondary btn-sm" onclick="credSection=null;renderCredentialing()">← Home</button>
+      <h2 style="font-size:18px;font-weight:700;color:#1e293b">Expiring Credentials</h2>
+    </div>
+    ${!items.length?`<div class="card" style="padding:56px;text-align:center;color:#94a3b8">
+      <div style="font-size:40px;margin-bottom:12px">✓</div>
+      <div style="font-size:15px;font-weight:600;color:#16a34a">All credentials are current</div>
+      <div style="font-size:13px;margin-top:4px">Nothing expiring in the next 90 days</div>
+    </div>`:`
+    <div class="card">
+      <div class="table-wrap"><table>
+        <thead><tr><th>Provider</th><th>Credential</th><th>Expiry Date</th><th>Status</th><th></th></tr></thead>
+        <tbody>${items.map(item=>{
+          const col=item.days<0?'#dc2626':item.days<=30?'#c2410c':'#a16207';
+          const bg=item.days<0?'#fee2e2':item.days<=30?'#fff7ed':'#fefce8';
+          const lbl=item.days<0?`Expired ${Math.abs(item.days)}d ago`:item.days===0?'Expires today':`${item.days} days left`;
+          return`<tr style="background:${bg}">
+            <td style="font-weight:600">${escHtml(item.name)}</td>
+            <td>${escHtml(item.label)}</td>
+            <td style="font-size:12px">${fmtDate(item.expiry)}</td>
+            <td><span style="font-size:11px;font-weight:700;color:${col}">${lbl}</span></td>
+            <td><button class="btn btn-xs btn-secondary" onclick="credTab='${item.tab}';openProviderProfile('${item.cid}')">Open →</button></td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table></div>
+    </div>`}`;
+}
+
+function renderCredDocsBrowser(){
+  const hiredProviders=contacts.filter(c=>c.name&&c.stage==='Hired').sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  const allDocs=[];
+  hiredProviders.forEach(c=>{
+    const p=credentialing[c.id]||{};
+    Object.values(p.documents||{}).forEach(d=>allDocs.push({...d,providerName:c.name,cid:c.id}));
+  });
+  allDocs.sort((a,b)=>b.uploadedAt-a.uploadedAt);
+
+  const CATS=['All','License Certificate','Board Certificate','CME Certificate','Malpractice Certificate','CV / Resume','Government ID','Training Certificate','Other'];
+  const catFilter=(document.getElementById('cred-doc-filter')||{}).value||'All';
+  const filtered=catFilter==='All'?allDocs:allDocs.filter(d=>d.category===catFilter);
+
+  document.getElementById('content').innerHTML=`
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+      <button class="btn btn-secondary btn-sm" onclick="credSection=null;renderCredentialing()">← Home</button>
+      <h2 style="font-size:18px;font-weight:700;color:#1e293b">All Documents</h2>
+    </div>
+    <div class="filter-bar" style="margin-bottom:16px">
+      <select class="filter-select" id="cred-doc-filter" onchange="renderCredDocsBrowser()">
+        ${CATS.map(c=>`<option value="${c}" ${catFilter===c?'selected':''}>${c}</option>`).join('')}
+      </select>
+      <span style="font-size:12px;color:#64748b">${filtered.length} file${filtered.length!==1?'s':''}</span>
+    </div>
+    <div class="card" style="padding:20px">
+      ${!filtered.length?'<div style="padding:40px;text-align:center;color:#94a3b8;font-size:13px">No documents found</div>':`
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${filtered.map(d=>{
+          const isImg=d.fileType&&d.fileType.startsWith('image/');
+          const isPdf=d.fileType==='application/pdf';
+          const icon=isImg?'🖼':isPdf?'📑':(d.name||'').match(/\.docx?$/i)?'📝':'📄';
+          return`<div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:#f8fafc;border:1px solid var(--border);border-radius:8px">
+            <span style="font-size:20px;flex-shrink:0">${icon}</span>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;font-weight:500;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(d.name)}</div>
+              <div style="font-size:11px;color:#94a3b8">${escHtml(d.providerName)} · ${escHtml(d.category||'Other')} · ${new Date(d.uploadedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div>
+            </div>
+            <a href="${d.data}" download="${escHtml(d.name)}" class="btn btn-secondary btn-xs">↓ Download</a>
+            <button class="btn btn-xs btn-secondary" onclick="credTab='documents';openProviderProfile('${d.cid}')">Open →</button>
+          </div>`;
+        }).join('')}
+      </div>`}
     </div>`;
 }
 
@@ -3765,7 +4019,7 @@ function renderProviderDetail(cid){
   else if(credTab==='documents') body=renderCredDocsTab(cid,p);
   document.getElementById('content').innerHTML=`
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
-      <button class="btn btn-secondary btn-sm" onclick="credView=null;renderCredentialing()">← Back</button>
+      <button class="btn btn-secondary btn-sm" onclick="credView=null;if(!credSection)credSection='providers';renderCredentialing()">← Back</button>
       <div style="width:44px;height:44px;border-radius:50%;background:${avatarBg(c.name)};color:#fff;font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${ini}</div>
       <div style="flex:1">
         <div style="display:flex;align-items:center;gap:8px">
