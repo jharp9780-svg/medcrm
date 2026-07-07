@@ -4837,12 +4837,35 @@ function inlineEditTask(id, field, el){
     w.onchange=()=>save(w.value);
     w.onblur=cancel;
   } else if(field==='contactId'){
-    w=document.createElement('select'); w.style.cssText=s+'min-width:160px';
-    const none=document.createElement('option'); none.value=''; none.textContent='— None —'; w.appendChild(none);
-    contacts.filter(c=>c.name&&c.stage==='Hired').sort((a,b)=>a.name.localeCompare(b.name)).forEach(c=>{
-      const o=document.createElement('option'); o.value=c.id; o.textContent=c.name; if(c.id===t.contactId) o.selected=true; w.appendChild(o);});
-    w.onchange=()=>save(w.value);
-    w.onblur=cancel;
+    const hired=contacts.filter(c=>c.name&&c.stage==='Hired').map(c=>{
+      const parts=(c.name||'').trim().split(/\s+/);
+      const last=parts.length>1?parts[parts.length-1]:parts[0];
+      const first=parts.length>1?parts.slice(0,-1).join(' '):'';
+      return{id:c.id,name:c.name,display:last+(first?', '+first:''),specialty:c.specialty||''};
+    }).sort((a,b)=>a.display.localeCompare(b.display));
+    const wrap=document.createElement('div'); wrap.style.cssText='position:relative;display:inline-block;min-width:180px';
+    w=document.createElement('input'); w.type='text';
+    const curDoc=hired.find(x=>x.id===t.contactId);
+    w.value=curDoc?curDoc.display:''; w.placeholder='Search doctor (Last, First)…';
+    w.style.cssText=s+'width:100%';
+    const sugg=document.createElement('div');
+    sugg.style.cssText='position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:60;margin-top:2px;max-height:220px;overflow-y:auto';
+    const renderSugg=val=>{
+      const q=(val||'').toLowerCase();
+      const matches=hired.filter(d=>!q||d.display.toLowerCase().includes(q)||d.name.toLowerCase().includes(q)).slice(0,10);
+      if(!matches.length){sugg.style.display='none';return;}
+      sugg.innerHTML=matches.map(d=>`<div data-id="${d.id}" style="padding:8px 12px;font-size:13px;cursor:pointer;color:#1e293b" onmousedown="event.preventDefault()" onmouseenter="this.style.background='#eff6ff'" onmouseleave="this.style.background=''"><span style="font-weight:500">${escHtml(d.display)}</span>${d.specialty?`<span style="font-size:11px;color:#64748b;margin-left:6px">${escHtml(d.specialty)}</span>`:''}</div>`).join('');
+      sugg.style.display='block';
+    };
+    w.oninput=()=>renderSugg(w.value);
+    w.onfocus=()=>renderSugg(w.value);
+    w.onkeydown=e=>{if(e.key==='Escape') cancel();};
+    w.onblur=()=>{setTimeout(()=>{if(el.dataset.editing) cancel();},150);};
+    sugg.onclick=e=>{const d=e.target.closest('[data-id]');if(d){save(d.dataset.id);sugg.style.display='none';}};
+    wrap.appendChild(w); wrap.appendChild(sugg);
+    el.innerHTML=''; el.appendChild(wrap); w.focus();
+    renderSugg('');
+    return;
   } else if(field==='assignee'){
     // Text input with a suggestion dropdown below for quick picks
     const wrap=document.createElement('div'); wrap.style.cssText='position:relative;display:inline-block;min-width:160px';
