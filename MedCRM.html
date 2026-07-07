@@ -4784,7 +4784,11 @@ function exportTMinusExcel(){
     if(!isPast) return true;
     return toArr(l.tasks).some(t=>!t.done);
   });
-  // Flatten tasks + launch-day marker rows, sort by due date
+  const _MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const fmt=d=>d?`${d.getDate()}-${_MON[d.getMonth()]}-${String(d.getFullYear()).slice(-2)}`:'';
+  const esc=s=>(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  // ── Sheet 1: T-Minus Tasks ──
   const rows=[];
   toExport.forEach(l=>{
     toArr(l.tasks).forEach(t=>{
@@ -4793,40 +4797,61 @@ function exportTMinusExcel(){
     if(l.launchDate) rows.push({due:new Date(l.launchDate+'T00:00:00'),event:l.doctorEvent,task:l.launchNote||'1st Shift',txDays:null,owner:'',done:false,notes:'',isLaunch:true});
   });
   rows.sort((a,b)=>!a.due?1:!b.due?-1:a.due-b.due);
-  const _MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const fmt=d=>d?`${d.getDate()}-${_MON[d.getMonth()]}-${String(d.getFullYear()).slice(-2)}`:'';
-  const esc=s=>(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const col=(bg,fg='#000')=>`background:${bg};color:${fg}`;
-  let html=`<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8">
-  <style>
-    table{border-collapse:collapse}
-    td,th{border:1px solid #bbb;font-family:Arial,sans-serif;font-size:10pt;padding:4px 10px;white-space:nowrap}
-    .hdr{background:#1e293b;color:#fff;font-weight:bold;font-size:11pt}
-    .launch{background:#000;color:#fff;font-weight:bold}
-    .done{background:#16a34a;color:#fff}
-    .overdue{background:#dc2626;color:#fff}
-    .today{background:#fef08a;color:#000;font-weight:bold}
-    .normal{background:#fff;color:#000}
-  </style></head><body><table>
-  <colgroup><col style="width:80pt"><col style="width:230pt"><col style="width:270pt"><col style="width:55pt"><col style="width:55pt"><col style="width:200pt"></colgroup>
-  <tr><th class="hdr">Due Date</th><th class="hdr">Physician / Event</th><th class="hdr">Task</th><th class="hdr">T-Days</th><th class="hdr">Owner</th><th class="hdr">Notes</th></tr>`;
+
+  const border=`<Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#BBBBBB"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#BBBBBB"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#BBBBBB"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#BBBBBB"/></Borders>`;
+  const boldBorder=`<Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="2" ss:Color="#555555"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="2" ss:Color="#555555"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="2" ss:Color="#555555"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="2" ss:Color="#555555"/></Borders>`;
+
+  const mkCell=(val,sid)=>`<Cell ss:StyleID="${sid}"><Data ss:Type="String">${esc(String(val==null?'':val))}</Data></Cell>`;
+
+  let s1rows='';
   let todayDone=false;
   rows.forEach(r=>{
     if(!todayDone&&r.due&&r.due>=today){
-      html+=`<tr><td class="today" colspan="6">${fmt(today)} &nbsp;—&nbsp; Today's Date</td></tr>`;
+      s1rows+=`<Row>${mkCell(fmt(today)+' — Today\'s Date','today')}${['','','','',''].map(()=>`<Cell ss:StyleID="today"><Data ss:Type="String"></Data></Cell>`).join('')}</Row>`;
       todayDone=true;
     }
     if(r.isLaunch){
-      html+=`<tr><td class="launch">${fmt(r.due)}</td><td class="launch">${esc(r.event)}</td><td class="launch">${esc(r.task)}</td><td class="launch"></td><td class="launch"></td><td class="launch"></td></tr>`;
+      s1rows+=`<Row>${mkCell(fmt(r.due),'launch')}${mkCell(r.event,'launch')}${mkCell(r.task,'launch')}${mkCell('','launch')}${mkCell('','launch')}${mkCell('','launch')}</Row>`;
     } else {
       const overdue=r.due&&r.due<today&&!r.done;
-      const cls=r.done?'done':overdue?'overdue':'normal';
-      html+=`<tr><td class="${cls}">${fmt(r.due)}</td><td class="${cls}">${esc(r.event)}</td><td class="${cls}">${esc(r.task)}</td><td class="${cls}" style="text-align:center">${r.txDays!=null?r.txDays:''}</td><td class="${cls}" style="text-align:center">${esc(r.owner)}</td><td class="${cls}">${esc(r.notes)}</td></tr>`;
+      const sid=r.done?'done':overdue?'overdue':'normal';
+      s1rows+=`<Row>${mkCell(fmt(r.due),sid)}${mkCell(r.event,sid)}${mkCell(r.task,sid)}${mkCell(r.txDays!=null?r.txDays:'',sid)}${mkCell(r.owner,sid)}${mkCell(r.notes,sid)}</Row>`;
     }
   });
-  if(!todayDone) html+=`<tr><td class="today" colspan="6">${fmt(today)} &nbsp;—&nbsp; Today's Date</td></tr>`;
-  html+='</table></body></html>';
-  const blob=new Blob([html],{type:'application/vnd.ms-excel;charset=utf-8'});
+  if(!todayDone) s1rows+=`<Row>${mkCell(fmt(today)+' — Today\'s Date','today')}${['','','','',''].map(()=>`<Cell ss:StyleID="today"><Data ss:Type="String"></Data></Cell>`).join('')}</Row>`;
+
+  const sheet1=`<Worksheet ss:Name="T-Minus Tasks"><Table ss:DefaultRowHeight="14">
+<Column ss:Width="85"/><Column ss:Width="180"/><Column ss:Width="240"/><Column ss:Width="52"/><Column ss:Width="90"/><Column ss:Width="190"/>
+<Row>${mkCell('Due Date','hdr')}${mkCell('Physician / Event','hdr')}${mkCell('Task','hdr')}${mkCell('T-Days','hdr')}${mkCell('Owner','hdr')}${mkCell('Notes','hdr')}</Row>
+${s1rows}</Table></Worksheet>`;
+
+  // ── Sheet 2: DFS Summary ──
+  let s2rows='';
+  toExport.forEach((l,i)=>{
+    const ld=l.launchDate?new Date(l.launchDate+'T00:00:00'):null;
+    const parts=l.doctorEvent?l.doctorEvent.split(' - '):[];
+    const docName=l.doctor||parts[0]||l.doctorEvent||'';
+    const client=parts.slice(1).join(' - ')||l.hospital||'';
+    s2rows+=`<Row>${mkCell(String(i+1),'normal')}${mkCell(docName,'normal')}${mkCell(l.office||'','normal')}${mkCell(client,'normal')}${mkCell(fmt(ld),'normal')}${mkCell('','normal')}</Row>`;
+  });
+
+  const sheet2=`<Worksheet ss:Name="DFS Summary"><Table ss:DefaultRowHeight="14">
+<Column ss:Width="35"/><Column ss:Width="180"/><Column ss:Width="130"/><Column ss:Width="220"/><Column ss:Width="140"/><Column ss:Width="200"/>
+<Row>${mkCell('#','hdr')}${mkCell('Physician','hdr')}${mkCell('Office','hdr')}${mkCell('Client / Program','hdr')}${mkCell('US Date / Assigned Desired FS (US) or Best Estimate','hdr')}${mkCell('Comments','hdr')}</Row>
+${s2rows}</Table></Worksheet>`;
+
+  const styles=`<Styles>
+<Style ss:ID="hdr"><Alignment ss:Horizontal="Left"/><Font ss:Bold="1" ss:Color="#FFFFFF" ss:Size="11" ss:Name="Arial"/><Interior ss:Color="#1E293B" ss:Pattern="Solid"/>${boldBorder}</Style>
+<Style ss:ID="done"><Font ss:Color="#FFFFFF" ss:Name="Arial" ss:Size="10"/><Interior ss:Color="#16A34A" ss:Pattern="Solid"/>${border}</Style>
+<Style ss:ID="overdue"><Font ss:Color="#FFFFFF" ss:Name="Arial" ss:Size="10"/><Interior ss:Color="#DC2626" ss:Pattern="Solid"/>${border}</Style>
+<Style ss:ID="launch"><Font ss:Bold="1" ss:Color="#FFFFFF" ss:Name="Arial" ss:Size="10"/><Interior ss:Color="#000000" ss:Pattern="Solid"/>${border}</Style>
+<Style ss:ID="today"><Font ss:Bold="1" ss:Name="Arial" ss:Size="10"/><Interior ss:Color="#FEF08A" ss:Pattern="Solid"/>${border}</Style>
+<Style ss:ID="normal"><Font ss:Name="Arial" ss:Size="10"/><Interior ss:Color="#FFFFFF" ss:Pattern="Solid"/>${border}</Style>
+</Styles>`;
+
+  const xml=`<?xml version="1.0" encoding="UTF-8"?>\n<?mso-application progid="Excel.Sheet"?>\n<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">\n${styles}\n${sheet1}\n${sheet2}\n</Workbook>`;
+
+  const blob=new Blob([xml],{type:'application/vnd.ms-excel;charset=utf-8'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
   a.download='TMinus_Launches_'+new Date().toISOString().slice(0,10)+'.xls';
