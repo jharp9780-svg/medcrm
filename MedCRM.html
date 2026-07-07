@@ -4841,8 +4841,9 @@ function inlineEditTask(id, field, el){
 
   const save=val=>{
     if(field==='contactId'){
-      const c=contacts.find(x=>x.id===val);
-      t.contactId=val||''; t.contactName=c?c.name:'';
+      if(val==='__none__'){t.contactId='';t.contactName='';}
+      else if(val==='__multi__'){t.contactId='';t.contactName='Multiple Doctors';}
+      else{const c=contacts.find(x=>x.id===val);t.contactId=val||'';t.contactName=c?c.name:'';}
     } else {
       t[field]=val;
     }
@@ -4888,11 +4889,16 @@ function inlineEditTask(id, field, el){
     sugg.style.cssText='position:fixed;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.15);z-index:9999;max-height:240px;overflow-y:auto;display:none';
     document.body.appendChild(sugg);
     const positionSugg=()=>{const r=w.getBoundingClientRect();sugg.style.left=r.left+'px';sugg.style.width=Math.max(r.width,240)+'px';const below=r.bottom+8;const above=r.top-8;sugg.style.maxHeight='220px';if(below+220>window.innerHeight&&above>220){sugg.style.top='';sugg.style.bottom=(window.innerHeight-r.top+4)+'px';}else{sugg.style.top=below+'px';sugg.style.bottom='';}};
+    const SPECIAL=[{id:'__none__',name:'',display:'— No Doctor',specialty:''},{id:'__multi__',name:'Multiple Doctors',display:'Multiple Doctors',specialty:''}];
     const renderSugg=val=>{
       const q=(val||'').toLowerCase();
+      const specials=SPECIAL.filter(d=>!q||d.display.toLowerCase().includes(q));
       const matches=hired.filter(d=>!q||d.display.toLowerCase().includes(q)||d.name.toLowerCase().includes(q)).slice(0,12);
-      if(!matches.length){sugg.style.display='none';return;}
-      sugg.innerHTML=matches.map(d=>`<div data-id="${d.id}" style="padding:9px 14px;font-size:13px;cursor:pointer;color:#1e293b;border-bottom:1px solid #f1f5f9" onmousedown="event.preventDefault()" onmouseenter="this.style.background='#eff6ff'" onmouseleave="this.style.background=''"><span style="font-weight:500">${escHtml(d.display)}</span>${d.specialty?`<span style="font-size:11px;color:#64748b;margin-left:8px">${escHtml(d.specialty)}</span>`:''}</div>`).join('');
+      if(!specials.length&&!matches.length){sugg.style.display='none';return;}
+      const rowCss='padding:9px 14px;font-size:13px;cursor:pointer;color:#1e293b;border-bottom:1px solid #f1f5f9';
+      sugg.innerHTML=
+        specials.map(d=>`<div data-id="${d.id}" style="${rowCss};color:#64748b;font-style:italic" onmousedown="event.preventDefault()" onmouseenter="this.style.background='#f8fafc'" onmouseleave="this.style.background=''">${escHtml(d.display)}</div>`).join('')+
+        matches.map(d=>`<div data-id="${d.id}" style="${rowCss}" onmousedown="event.preventDefault()" onmouseenter="this.style.background='#eff6ff'" onmouseleave="this.style.background=''"><span style="font-weight:500">${escHtml(d.display)}</span>${d.specialty?`<span style="font-size:11px;color:#64748b;margin-left:8px">${escHtml(d.specialty)}</span>`:''}</div>`).join('');
       sugg.style.display='block'; positionSugg();
     };
     const cleanup=()=>{if(sugg.parentNode) sugg.parentNode.removeChild(sugg);};
@@ -4971,11 +4977,12 @@ function taskDocSearch(val){
   const dd=document.getElementById('qa-doc-dropdown');
   if(!dd) return;
   const q=(val||'').trim().toLowerCase();
-  if(!q){dd.style.display='none';_qaDocId='';_qaDocName='';return;}
   const hired=contacts.filter(c=>c.name&&c.stage==='Hired');
+  const specRow=(id,label)=>`<div onclick="selectQADoctor('${id}','${label}')" style="padding:8px 12px;cursor:pointer;font-size:13px;color:#64748b;font-style:italic;border-bottom:1px solid #f1f5f9" onmouseenter="this.style.background='#f8fafc'" onmouseleave="this.style.background=''">${label}</div>`;
+  const specials=(!q||'no doctor'.includes(q)||'multiple'.includes(q))?[specRow('__none__','— No Doctor'),specRow('__multi__','Multiple Doctors')]:[];
   const matches=hired.filter(c=>(c.name||'').toLowerCase().includes(q)).slice(0,8);
-  if(!matches.length){dd.style.display='none';return;}
-  dd.innerHTML=matches.map(c=>`
+  if(!specials.length&&!matches.length){dd.style.display='none';return;}
+  dd.innerHTML=specials.join('')+matches.map(c=>`
     <div onclick="selectQADoctor('${c.id}','${escHtml(c.name).replace(/'/g,"&#39;")}')"
       style="padding:8px 12px;cursor:pointer;font-size:13px;color:#1e293b;border-bottom:1px solid #f1f5f9"
       onmouseenter="this.style.background='#eff6ff'" onmouseleave="this.style.background=''">
@@ -4986,9 +4993,11 @@ function taskDocSearch(val){
 }
 
 function selectQADoctor(id,name){
-  _qaDocId=id; _qaDocName=name;
+  if(id==='__none__'){_qaDocId='';_qaDocName='';}
+  else if(id==='__multi__'){_qaDocId='';_qaDocName='Multiple Doctors';}
+  else{_qaDocId=id;_qaDocName=name;}
   const inp=document.getElementById('qa-doc-input');
-  if(inp) inp.value=name;
+  if(inp) inp.value=_qaDocName;
   const dd=document.getElementById('qa-doc-dropdown');
   if(dd) dd.style.display='none';
   const ti=document.getElementById('qa-task-title');
