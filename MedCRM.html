@@ -4791,6 +4791,8 @@ function renderTasks(){
           const ac=assigneeColor(t.assignee);
           const ieCss='cursor:pointer;padding:12px 14px;transition:background .1s;vertical-align:middle' + (t.status==='done'?';opacity:0.5':'');
           const docDisplay=lastFirst(t.contactName||'');
+          const docContact=contacts.find(c=>c.id===t.contactId);
+          const docSpecialty=docContact&&docContact.specialty?docContact.specialty:'';
           return `<tr style="${t.status==='done'?'opacity:0.5':''}">
             <td style="padding:12px 8px;text-align:center;vertical-align:middle" onclick="quickToggleDone('${t.id}')">
               <div class="task-check${t.status==='done'?' done':''}" title="${t.status==='done'?'Reopen task':'Mark done'}">
@@ -4799,6 +4801,7 @@ function renderTasks(){
             </td>
             <td style="${ieCss}" onclick="inlineEditTask('${t.id}','contactId',this)" title="Click to change doctor">
               <span style="font-weight:600;color:#1e293b">${escHtml(docDisplay||'—')}</span>
+              ${docSpecialty?`<br><span style="font-size:11px;color:#64748b;font-weight:400">${escHtml(docSpecialty)}</span>`:''}
               <span class="ie-hint">▾</span>
             </td>
             <td style="${ieCss}" onclick="inlineEditTask('${t.id}','hospital',this)" title="Click to edit">
