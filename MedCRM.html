@@ -4756,48 +4756,61 @@ function toggleTmTask(launchId,taskId){
 }
 function exportTMinusExcel(){
   const today=new Date(); today.setHours(0,0,0,0);
-  const sorted=[...tminusLaunches].sort((a,b)=>{
+  const allSorted=[...tminusLaunches].sort((a,b)=>{
     if(!a.launchDate) return 1; if(!b.launchDate) return -1;
     return new Date(a.launchDate)-new Date(b.launchDate);
   });
-  // Include upcoming + any past that have incomplete tasks
-  const toExport=sorted.filter(l=>{
+  const toExport=allSorted.filter(l=>{
     const ld=l.launchDate?new Date(l.launchDate+'T00:00:00'):null;
     const isPast=ld&&ld<today;
     if(!isPast) return true;
     return toArr(l.tasks).some(t=>!t.done);
   });
-  let csv='NEW PHYSICIAN LAUNCHES\n';
-  csv+='#,Physician,Office,Client / Program,US Date (Assigned Desired FS or Best Estimate),Type,Tasks Done,Tasks Total,Status\n';
-  toExport.forEach((l,i)=>{
-    const ld=l.launchDate?new Date(l.launchDate+'T00:00:00'):null;
-    const isPast=ld&&ld<today;
-    const docName=l.doctor||l.doctorEvent.split(' - ')[0];
-    const hosp=l.hospital||l.launchNote||l.doctorEvent.split(' - ').slice(1).join(' - ')||'';
-    const tasks=toArr(l.tasks);
-    const done=tasks.filter(t=>t.done).length;
-    const dateStr=ld?ld.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'';
-    const type=l.launchType==='hospital'?'New Hospital Start':'New Office Setup';
-    const status=isPast?'Launched':'Upcoming';
-    csv+=`${i+1},"${docName}","${l.office||''}","${hosp}","${dateStr}","${type}",${done},${tasks.length},"${status}"\n`;
-  });
-  csv+='\n\nPREP TASKS DETAIL\n';
-  csv+='Physician,Office,Client,US Date,Task Group,Task,Owner,Due Date,Done,Notes\n';
+  // Flatten tasks + launch-day marker rows, sort by due date
+  const rows=[];
   toExport.forEach(l=>{
-    const docName=l.doctor||l.doctorEvent.split(' - ')[0];
-    const hosp=l.hospital||l.launchNote||l.doctorEvent.split(' - ').slice(1).join(' - ')||'';
-    const ld=l.launchDate?new Date(l.launchDate+'T00:00:00'):null;
-    const dateStr=ld?ld.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'';
     toArr(l.tasks).forEach(t=>{
-      const group=t.txDays===0?'Launch Day':`T${t.txDays}`;
-      const due=t.dueDate?new Date(t.dueDate+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'';
-      csv+=`"${docName}","${l.office||''}","${hosp}","${dateStr}","${group}","${t.task}","${t.owner||''}","${due}","${t.done?'Yes':'No'}","${(t.notes||'').replace(/"/g,"'")}"\n`;
+      rows.push({due:t.dueDate?new Date(t.dueDate+'T00:00:00'):null,event:l.doctorEvent,task:t.task,txDays:t.txDays,owner:t.owner||'',done:t.done,notes:t.notes||'',isLaunch:false});
     });
+    if(l.launchDate) rows.push({due:new Date(l.launchDate+'T00:00:00'),event:l.doctorEvent,task:l.launchNote||'1st Shift',txDays:null,owner:'',done:false,notes:'',isLaunch:true});
   });
-  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});
+  rows.sort((a,b)=>!a.due?1:!b.due?-1:a.due-b.due);
+  const fmt=d=>d?d.toLocaleDateString('en-US',{day:'2-digit',month:'short',year:'2-digit'}).replace(/ /g,'-'):'';
+  const esc=s=>(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const col=(bg,fg='#000')=>`background:${bg};color:${fg}`;
+  let html=`<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8">
+  <style>
+    table{border-collapse:collapse}
+    td,th{border:1px solid #bbb;font-family:Arial,sans-serif;font-size:10pt;padding:4px 10px;white-space:nowrap}
+    .hdr{background:#1e293b;color:#fff;font-weight:bold;font-size:11pt}
+    .launch{background:#000;color:#fff;font-weight:bold}
+    .done{background:#16a34a;color:#fff}
+    .overdue{background:#dc2626;color:#fff}
+    .today{background:#fef08a;color:#000;font-weight:bold}
+    .normal{background:#fff;color:#000}
+  </style></head><body><table>
+  <colgroup><col style="width:80pt"><col style="width:230pt"><col style="width:270pt"><col style="width:55pt"><col style="width:55pt"><col style="width:200pt"></colgroup>
+  <tr><th class="hdr">Due Date</th><th class="hdr">Physician / Event</th><th class="hdr">Task</th><th class="hdr">T-Days</th><th class="hdr">Owner</th><th class="hdr">Notes</th></tr>`;
+  let todayDone=false;
+  rows.forEach(r=>{
+    if(!todayDone&&r.due&&r.due>=today){
+      html+=`<tr><td class="today" colspan="6">${fmt(today)} &nbsp;—&nbsp; Today's Date</td></tr>`;
+      todayDone=true;
+    }
+    if(r.isLaunch){
+      html+=`<tr><td class="launch">${fmt(r.due)}</td><td class="launch">${esc(r.event)}</td><td class="launch">${esc(r.task)}</td><td class="launch"></td><td class="launch"></td><td class="launch"></td></tr>`;
+    } else {
+      const overdue=r.due&&r.due<today&&!r.done;
+      const cls=r.done?'done':overdue?'overdue':'normal';
+      html+=`<tr><td class="${cls}">${fmt(r.due)}</td><td class="${cls}">${esc(r.event)}</td><td class="${cls}">${esc(r.task)}</td><td class="${cls}" style="text-align:center">${r.txDays!=null?r.txDays:''}</td><td class="${cls}" style="text-align:center">${esc(r.owner)}</td><td class="${cls}">${esc(r.notes)}</td></tr>`;
+    }
+  });
+  if(!todayDone) html+=`<tr><td class="today" colspan="6">${fmt(today)} &nbsp;—&nbsp; Today's Date</td></tr>`;
+  html+='</table></body></html>';
+  const blob=new Blob([html],{type:'application/vnd.ms-excel;charset=utf-8'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
-  a.download='TMinus_Launches_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.download='TMinus_Launches_'+new Date().toISOString().slice(0,10)+'.xls';
   a.click();
   URL.revokeObjectURL(a.href);
 }
