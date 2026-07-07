@@ -4844,22 +4844,29 @@ function inlineEditTask(id, field, el){
     w.onchange=()=>save(w.value);
     w.onblur=cancel;
   } else if(field==='assignee'){
-    w=document.createElement('select'); w.style.cssText=s+'min-width:130px';
-    const none=document.createElement('option'); none.value=''; none.textContent='— Unassigned —'; w.appendChild(none);
-    TEAM.forEach(name=>{const o=document.createElement('option'); o.value=name; o.textContent=name; if(name===t.assignee) o.selected=true; w.appendChild(o);});
-    // also allow free-type via a text option at bottom
-    const custom=document.createElement('option'); custom.value='__custom__'; custom.textContent='Other (type below)…'; w.appendChild(custom);
-    w.onchange=()=>{
-      if(w.value==='__custom__'){
-        const inp=document.createElement('input'); inp.type='text'; inp.placeholder='Type name…'; inp.style.cssText=s+'min-width:130px';
-        inp.onkeydown=e=>{if(e.key==='Enter') save(inp.value.trim()); if(e.key==='Escape') cancel();};
-        inp.onblur=()=>save(inp.value.trim());
-        el.innerHTML=''; el.appendChild(inp); inp.focus();
-        return;
-      }
-      save(w.value);
+    // Text input with a suggestion dropdown below for quick picks
+    const wrap=document.createElement('div'); wrap.style.cssText='position:relative;display:inline-block;min-width:160px';
+    w=document.createElement('input'); w.type='text'; w.value=t.assignee||''; w.placeholder='Type name…';
+    w.style.cssText=s+'width:100%';
+    const sugg=document.createElement('div');
+    sugg.style.cssText='position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.1);z-index:60;margin-top:2px';
+    const renderSugg=val=>{
+      const q=(val||'').toLowerCase();
+      const matches=TEAM.filter(n=>!q||n.toLowerCase().includes(q));
+      if(!matches.length){sugg.style.display='none';return;}
+      sugg.innerHTML=matches.map(n=>`<div data-name="${escHtml(n)}" style="padding:7px 12px;font-size:13px;cursor:pointer;color:#374151" onmousedown="event.preventDefault()" onmouseenter="this.style.background='#eff6ff'" onmouseleave="this.style.background=''">${escHtml(n)}</div>`).join('');
+      sugg.style.display='block';
     };
-    w.onblur=()=>{if(w.value!=='__custom__') setTimeout(()=>{ if(el.dataset.editing) cancel(); },150);};
+    w.oninput=()=>renderSugg(w.value);
+    w.onfocus=()=>renderSugg(w.value);
+    w.onkeydown=e=>{if(e.key==='Enter'){save(w.value.trim());sugg.style.display='none';} if(e.key==='Escape') cancel();};
+    w.onblur=()=>{setTimeout(()=>{save(w.value.trim());},150);};
+    sugg.onclick=e=>{const d=e.target.closest('[data-name]');if(d){save(d.dataset.name);sugg.style.display='none';}};
+    wrap.appendChild(w); wrap.appendChild(sugg);
+    el.innerHTML=''; el.appendChild(wrap); w.focus();
+    const len=w.value.length; w.setSelectionRange(len,len);
+    renderSugg(w.value);
+    return;
   } else if(field==='dueDate'){
     w=document.createElement('input'); w.type='text'; w.placeholder='MM/DD/YYYY';
     w.value=t.dueDate?new Date(t.dueDate+'T00:00:00').toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'numeric'}):'';
