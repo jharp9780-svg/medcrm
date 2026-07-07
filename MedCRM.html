@@ -4760,10 +4760,16 @@ function exportTMinusExcel(){
     if(!a.launchDate) return 1; if(!b.launchDate) return -1;
     return new Date(a.launchDate)-new Date(b.launchDate);
   });
-  // Sheet 1: Summary
+  // Include upcoming + any past that have incomplete tasks
+  const toExport=sorted.filter(l=>{
+    const ld=l.launchDate?new Date(l.launchDate+'T00:00:00'):null;
+    const isPast=ld&&ld<today;
+    if(!isPast) return true;
+    return toArr(l.tasks).some(t=>!t.done);
+  });
   let csv='NEW PHYSICIAN LAUNCHES\n';
-  csv+='#,Physician,Office,Client / Program,First Shift Date,Type,Tasks Done,Tasks Total,Status\n';
-  sorted.forEach((l,i)=>{
+  csv+='#,Physician,Office,Client / Program,US Date (Assigned Desired FS or Best Estimate),Type,Tasks Done,Tasks Total,Status\n';
+  toExport.forEach((l,i)=>{
     const ld=l.launchDate?new Date(l.launchDate+'T00:00:00'):null;
     const isPast=ld&&ld<today;
     const docName=l.doctor||l.doctorEvent.split(' - ')[0];
@@ -4776,8 +4782,8 @@ function exportTMinusExcel(){
     csv+=`${i+1},"${docName}","${l.office||''}","${hosp}","${dateStr}","${type}",${done},${tasks.length},"${status}"\n`;
   });
   csv+='\n\nPREP TASKS DETAIL\n';
-  csv+='Physician,Office,Client,First Shift,Task Group,Task,Owner,Due Date,Done,Notes\n';
-  sorted.forEach(l=>{
+  csv+='Physician,Office,Client,US Date,Task Group,Task,Owner,Due Date,Done,Notes\n';
+  toExport.forEach(l=>{
     const docName=l.doctor||l.doctorEvent.split(' - ')[0];
     const hosp=l.hospital||l.launchNote||l.doctorEvent.split(' - ').slice(1).join(' - ')||'';
     const ld=l.launchDate?new Date(l.launchDate+'T00:00:00'):null;
