@@ -4656,7 +4656,7 @@ function renderTasks(){
   const PALETTE=['#2563eb','#7c3aed','#059669','#d97706','#db2777','#0891b2'];
   const allAssignees=[...new Set(crmTasks.map(t=>t.assignee).filter(Boolean))];
   const assigneeColor=a=>PALETTE[allAssignees.indexOf(a)%PALETTE.length]||'#64748b';
-  const CATEGORIES=['Licensing','Credentialing','Onboarding','Contracting','Other'];
+  const CATEGORIES=['Licensing','Credentialing','Onboarding','Other'];
   const now=new Date();
 
   let filtered=crmTasks.filter(t=>{
@@ -4849,7 +4849,7 @@ function inlineEditTask(id, field, el){
   const cancel=()=>{delete el.dataset.editing;renderTasks();};
 
   const TEAM=[...new Set(['Neelima Clement','Oryan Amsalem','Becky Lushi',...crmTasks.map(x=>x.assignee).filter(Boolean)])];
-  const CATS=['Licensing','Credentialing','Onboarding','Contracting','Other'];
+  const CATS=['Licensing','Credentialing','Onboarding','Other'];
   const s='border:1px solid #93c5fd;border-radius:5px;padding:4px 7px;font-size:12px;outline:none;background:#fff;';
 
   let w;
@@ -5050,7 +5050,7 @@ function openTaskModal(id){
   if(!t) return;
 
   const TEAM=[...new Set(['Neelima Clement','Oryan Amsalem','Becky Lushi',...crmTasks.map(x=>x.assignee).filter(Boolean)])];
-  const CATEGORIES=['Licensing','Credentialing','Onboarding','Contracting','Other'];
+  const CATEGORIES=['Licensing','Credentialing','Onboarding','Other'];
   const doctorOpts=contacts.filter(c=>c.name&&c.stage==='Hired').sort((a,b)=>(a.name||'').localeCompare(b.name||''))
     .map(c=>`<option value="${c.id}" ${t.contactId===c.id?'selected':''}>${escHtml(c.name)}</option>`).join('');
 
