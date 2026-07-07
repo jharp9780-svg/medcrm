@@ -4874,7 +4874,7 @@ function openTaskModal(id){
     </div>
     <div class="form-row">
       <div class="form-group">
-        <label>Assignee (RICU Owner)</label>
+        <label>Assignee</label>
         <input type="text" id="tm-assignee" value="${escHtml(t.assignee||'')}" list="tm-assignee-list" placeholder="Name">
         <datalist id="tm-assignee-list">${TEAM.map(n=>`<option value="${escHtml(n)}">`).join('')}</datalist>
       </div>
