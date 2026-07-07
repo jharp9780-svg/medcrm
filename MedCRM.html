@@ -154,6 +154,9 @@ textarea{resize:vertical;min-height:80px}
 .task-check.done{border-color:#16a34a;background:#16a34a}
 .tm-log-entry{padding:10px 0;border-bottom:1px solid #f1f5f9}
 .tm-log-entry:last-child{border-bottom:none}
+.ie-hint{font-size:10px;color:#cbd5e1;margin-left:4px;opacity:0;transition:opacity .1s}
+tr:hover .ie-hint{opacity:1}
+td:hover .ie-hint{color:#93c5fd}
 .csv-preview-table th,.csv-preview-table td{padding:4px 8px;border:1px solid var(--border);text-align:left}
 .csv-preview-table th{background:#f1f5f9;font-weight:600}
 .doc-item{display:flex;align-items:center;gap:10px;padding:8px 12px;background:#f8fafc;border:1px solid var(--border);border-radius:7px;margin-bottom:6px}
@@ -4711,38 +4714,164 @@ function renderTasks(){
           <th>Assignee</th>
           <th>Due Date</th>
           <th>Last Update</th>
-          <th style="width:50px"></th>
+          <th style="width:70px"></th>
         </tr></thead>
         <tbody>${filtered.map(t=>{
           const st=STATUSES[t.status]||STATUSES.todo;
           const pr=PRIORITIES[t.priority]||PRIORITIES.medium;
           const isOverdue=t.status!=='done'&&t.dueDate&&new Date(t.dueDate)<now;
-          const dueStr=t.dueDate?new Date(t.dueDate+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}):'—';
+          const dueStr=t.dueDate?new Date(t.dueDate+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}):'<span style="color:#94a3b8">—</span>';
           const lastLog=t.log&&t.log.length?t.log[t.log.length-1]:null;
           const lastStr=lastLog?(lastLog.text.length>55?lastLog.text.substring(0,55)+'…':lastLog.text):'—';
           const initials=(t.assignee||'?').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
           const ac=assigneeColor(t.assignee);
-          return `<tr class="clickable" onclick="openTaskModal('${t.id}')" style="${t.status==='done'?'opacity:0.5':''}">
-            <td onclick="event.stopPropagation();quickToggleDone('${t.id}')">
+          const ieCss='cursor:pointer;padding:8px 10px;transition:background .1s' + (t.status==='done'?';opacity:0.5':'');
+          return `<tr style="${t.status==='done'?'opacity:0.5':''}">
+            <td onclick="quickToggleDone('${t.id}')">
               <div class="task-check${t.status==='done'?' done':''}" title="${t.status==='done'?'Reopen task':'Mark done'}">
                 ${t.status==='done'?'<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>':''}
               </div>
             </td>
-            <td style="font-weight:600;color:#1e293b">${escHtml(t.contactName||'—')}</td>
-            <td style="font-weight:500;color:#1e293b">${escHtml(t.title)}</td>
-            <td><span class="badge badge-gray" style="font-size:10px">${escHtml(t.category||'Other')}</span></td>
-            <td><span class="badge" style="background:${st.bg};color:${st.color};font-size:10px">${st.label}</span></td>
-            <td style="font-size:12px;font-weight:700;color:${pr.color}">${pr.label}</td>
-            <td>${t.assignee?`<div style="display:flex;align-items:center;gap:6px"><div style="width:26px;height:26px;border-radius:50%;background:${ac};color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${initials}</div><span style="font-size:12px">${escHtml(t.assignee.split(' ')[0])}</span></div>`:'<span style="color:#94a3b8">—</span>'}</td>
-            <td style="font-size:12px;font-weight:${isOverdue?700:400};color:${isOverdue?'#dc2626':'#374151'}">${isOverdue?'⚠ ':''}${dueStr}</td>
-            <td style="font-size:11px;color:#64748b;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(lastStr)}</td>
-            <td onclick="event.stopPropagation()"><button class="btn btn-xs btn-danger" onclick="deleteCrmTask('${t.id}')">✕</button></td>
+            <td style="${ieCss}" onclick="inlineEditTask('${t.id}','contactId',this)" title="Click to change doctor">
+              <span style="font-weight:600;color:#1e293b">${escHtml(t.contactName||'—')}</span>
+              <span class="ie-hint">▾</span>
+            </td>
+            <td style="${ieCss}" onclick="inlineEditTask('${t.id}','title',this)" title="Click to edit">
+              <span style="font-weight:500;color:#1e293b">${escHtml(t.title)}</span>
+              <span class="ie-hint">✎</span>
+            </td>
+            <td style="${ieCss}" onclick="inlineEditTask('${t.id}','category',this)" title="Click to change">
+              <span class="badge badge-gray" style="font-size:10px">${escHtml(t.category||'Other')}</span>
+              <span class="ie-hint">▾</span>
+            </td>
+            <td style="${ieCss}" onclick="inlineEditTask('${t.id}','status',this)" title="Click to change">
+              <span class="badge" style="background:${st.bg};color:${st.color};font-size:10px">${st.label}</span>
+              <span class="ie-hint">▾</span>
+            </td>
+            <td style="${ieCss}" onclick="inlineEditTask('${t.id}','priority',this)" title="Click to change">
+              <span style="font-size:12px;font-weight:700;color:${pr.color}">${pr.label}</span>
+              <span class="ie-hint">▾</span>
+            </td>
+            <td style="${ieCss}" onclick="inlineEditTask('${t.id}','assignee',this)" title="Click to edit">
+              ${t.assignee?`<div style="display:flex;align-items:center;gap:6px"><div style="width:26px;height:26px;border-radius:50%;background:${ac};color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${initials}</div><span style="font-size:12px">${escHtml(t.assignee.split(' ')[0])}</span></div>`:'<span style="color:#94a3b8">—</span>'}
+              <span class="ie-hint">✎</span>
+            </td>
+            <td style="${ieCss}" onclick="inlineEditTask('${t.id}','dueDate',this)" title="Click to set date">
+              <span style="font-size:12px;font-weight:${isOverdue?700:400};color:${isOverdue?'#dc2626':'#374151'}">${isOverdue?'⚠ ':''}${dueStr}</span>
+              <span class="ie-hint">✎</span>
+            </td>
+            <td style="font-size:11px;color:#64748b;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer" onclick="openTaskModal('${t.id}')" title="Open for action log">${escHtml(lastStr)}</td>
+            <td>
+              <div style="display:flex;gap:4px">
+                <button class="btn btn-xs btn-secondary" onclick="openTaskModal('${t.id}')" title="Open full detail">↗</button>
+                <button class="btn btn-xs btn-danger" onclick="deleteCrmTask('${t.id}')">✕</button>
+              </div>
+            </td>
           </tr>`;
         }).join('')}</tbody>
       </table></div>`}
     </div>`;
   const ts=document.getElementById('task-search');
   if(ts){const len=ts.value.length;ts.focus();ts.setSelectionRange(len,len);}
+}
+
+function inlineEditTask(id, field, el){
+  const t=crmTasks.find(x=>x.id===id);
+  if(!t||el.dataset.editing) return;
+  el.dataset.editing='1';
+
+  const save=val=>{
+    if(field==='contactId'){
+      const c=contacts.find(x=>x.id===val);
+      t.contactId=val||''; t.contactName=c?c.name:'';
+    } else {
+      t[field]=val;
+    }
+    saveCrmTaskById(id);
+    delete el.dataset.editing;
+    renderTasks();
+  };
+  const cancel=()=>{delete el.dataset.editing;renderTasks();};
+
+  const TEAM=[...new Set(['Neelima Clement','Oryan Amsalem','Becky Lushi',...crmTasks.map(x=>x.assignee).filter(Boolean)])];
+  const CATS=['Licensing','Credentialing','Onboarding','Contracting','Other'];
+  const s='border:1px solid #93c5fd;border-radius:5px;padding:4px 7px;font-size:12px;outline:none;background:#fff;';
+
+  let w;
+  if(field==='status'){
+    w=document.createElement('select'); w.style.cssText=s+'min-width:110px';
+    [['todo','To Do'],['inprogress','In Progress'],['blocked','Blocked'],['done','Done']].forEach(([v,l])=>{
+      const o=document.createElement('option'); o.value=v; o.textContent=l; if(v===(t.status||'todo')) o.selected=true; w.appendChild(o);});
+    w.onchange=()=>save(w.value);
+    w.onblur=cancel;
+  } else if(field==='priority'){
+    w=document.createElement('select'); w.style.cssText=s+'min-width:90px';
+    [['high','High'],['medium','Medium'],['low','Low']].forEach(([v,l])=>{
+      const o=document.createElement('option'); o.value=v; o.textContent=l; if(v===(t.priority||'medium')) o.selected=true; w.appendChild(o);});
+    w.onchange=()=>save(w.value);
+    w.onblur=cancel;
+  } else if(field==='category'){
+    w=document.createElement('select'); w.style.cssText=s+'min-width:110px';
+    CATS.forEach(c=>{const o=document.createElement('option'); o.value=c; o.textContent=c; if(c===t.category) o.selected=true; w.appendChild(o);});
+    w.onchange=()=>save(w.value);
+    w.onblur=cancel;
+  } else if(field==='contactId'){
+    w=document.createElement('select'); w.style.cssText=s+'min-width:160px';
+    const none=document.createElement('option'); none.value=''; none.textContent='— None —'; w.appendChild(none);
+    contacts.filter(c=>c.name&&c.stage==='Hired').sort((a,b)=>a.name.localeCompare(b.name)).forEach(c=>{
+      const o=document.createElement('option'); o.value=c.id; o.textContent=c.name; if(c.id===t.contactId) o.selected=true; w.appendChild(o);});
+    w.onchange=()=>save(w.value);
+    w.onblur=cancel;
+  } else if(field==='assignee'){
+    w=document.createElement('select'); w.style.cssText=s+'min-width:130px';
+    const none=document.createElement('option'); none.value=''; none.textContent='— Unassigned —'; w.appendChild(none);
+    TEAM.forEach(name=>{const o=document.createElement('option'); o.value=name; o.textContent=name; if(name===t.assignee) o.selected=true; w.appendChild(o);});
+    // also allow free-type via a text option at bottom
+    const custom=document.createElement('option'); custom.value='__custom__'; custom.textContent='Other (type below)…'; w.appendChild(custom);
+    w.onchange=()=>{
+      if(w.value==='__custom__'){
+        const inp=document.createElement('input'); inp.type='text'; inp.placeholder='Type name…'; inp.style.cssText=s+'min-width:130px';
+        inp.onkeydown=e=>{if(e.key==='Enter') save(inp.value.trim()); if(e.key==='Escape') cancel();};
+        inp.onblur=()=>save(inp.value.trim());
+        el.innerHTML=''; el.appendChild(inp); inp.focus();
+        return;
+      }
+      save(w.value);
+    };
+    w.onblur=()=>{if(w.value!=='__custom__') setTimeout(()=>{ if(el.dataset.editing) cancel(); },150);};
+  } else if(field==='dueDate'){
+    w=document.createElement('input'); w.type='text'; w.placeholder='MM/DD/YYYY';
+    w.value=t.dueDate?new Date(t.dueDate+'T00:00:00').toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'numeric'}):'';
+    w.style.cssText=s+'width:100px';
+    w.onkeydown=e=>{
+      if(e.key==='Enter'){
+        const v=w.value.trim();
+        if(!v){save('');return;}
+        // parse MM/DD/YYYY → YYYY-MM-DD
+        const m=v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+        if(m) save(`${m[3]}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`);
+        else save(v);
+      }
+      if(e.key==='Escape') cancel();
+    };
+    w.onblur=()=>{
+      const v=w.value.trim();
+      if(!v){save('');return;}
+      const m=v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      if(m) save(`${m[3]}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`);
+      else save(v);
+    };
+  } else {
+    // title — free text
+    w=document.createElement('input'); w.type='text'; w.value=t[field]||''; w.style.cssText=s+'min-width:160px;width:100%';
+    w.onkeydown=e=>{if(e.key==='Enter') save(w.value.trim()); if(e.key==='Escape') cancel();};
+    w.onblur=()=>save(w.value.trim());
+  }
+
+  el.innerHTML='';
+  el.appendChild(w);
+  w.focus();
+  if(w.tagName==='INPUT'){const len=w.value.length;w.setSelectionRange(len,len);}
 }
 
 let _qaDocId='',_qaDocName='';
