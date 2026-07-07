@@ -4922,7 +4922,7 @@ function renderTMinus(){
         }).join('')}
       </div>`:''}
       ${upcoming.length?`<h3 style="font-size:13px;font-weight:700;text-transform:uppercase;color:#64748b;letter-spacing:.05em;margin:0 0 12px">Upcoming (${upcoming.length})</h3>${upcoming.map(l=>launchCard(l,false)).join('')}`:'<p style="color:#94a3b8;text-align:center;padding:40px 0">No upcoming launches. Add one with + New Launch.</p>'}
-      ${past.length?`<h3 style="font-size:13px;font-weight:700;text-transform:uppercase;color:#94a3b8;letter-spacing:.05em;margin:24px 0 12px">Past Launches (${past.length})</h3>${past.map(l=>launchCard(l,true)).join('')}`:''}
+      ${past.length?`<div style="margin-top:24px"><button onclick="this.parentElement.querySelector('.past-launches-body').style.display=this.parentElement.querySelector('.past-launches-body').style.display==='none'?(this.textContent='▲ Hide past launches (${past.length})')&&'block':(this.textContent='▼ Show past launches (${past.length})')&&'none'" style="background:none;border:none;font-size:12px;font-weight:600;color:#94a3b8;cursor:pointer;padding:0;letter-spacing:.03em">▼ Show past launches (${past.length})</button><div class="past-launches-body" style="display:none;margin-top:12px">${past.map(l=>launchCard(l,true)).join('')}</div></div>`:''}
     </div>`;
   // restore open details panels
   el.querySelectorAll('details[data-lid]').forEach(d=>{if(_tmOpenCards.has(d.dataset.lid))d.open=true;});
