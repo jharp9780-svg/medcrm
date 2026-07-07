@@ -4754,6 +4754,25 @@ function toggleTmTask(launchId,taskId){
   document.querySelectorAll('details[data-lid]').forEach(d=>{if(d.open)_tmOpenCards.add(d.dataset.lid);else _tmOpenCards.delete(d.dataset.lid);});
   renderTMinus();
 }
+function changeLaunchType(launchId){
+  const launch=tminusLaunches.find(x=>x.id===launchId);
+  if(!launch) return;
+  const cur=launch.launchType==='hospital'?'hospital':'office';
+  const next=cur==='hospital'?'office':'hospital';
+  const label=next==='hospital'?'New Hospital Start (8 tasks: T-21, T-14)':'New Office Setup (14 tasks: T-75, T-21, T-14)';
+  if(!confirm('Switch to '+label+'?\n\nThis will replace the current task list with the new template. Checked items will be lost.')) return;
+  launch.launchType=next;
+  const template=next==='office'?TMINUS_TEMPLATE_OFFICE:TMINUS_TEMPLATE_HOSPITAL;
+  const ld=launch.launchDate?new Date(launch.launchDate+'T00:00:00'):new Date();
+  const ts=Date.now();
+  launch.tasks=template.map((t,i)=>{
+    const due=new Date(ld); due.setDate(due.getDate()+t.txDays);
+    return{id:'tm_'+ts+'_'+i,task:t.task,txDays:t.txDays,dueDate:due.toISOString().slice(0,10),owner:t.owner,done:false,notes:''};
+  });
+  saveTmLaunch(launch);
+  document.querySelectorAll('details[data-lid]').forEach(d=>{if(d.open)_tmOpenCards.add(d.dataset.lid);else _tmOpenCards.delete(d.dataset.lid);});
+  renderTMinus();
+}
 function editTmTaskNote(launchId,taskId){
   const launch=tminusLaunches.find(x=>x.id===launchId);
   if(!launch) return;
@@ -4861,19 +4880,19 @@ function renderTMinus(){
       return `<div style="margin-bottom:12px">
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#64748b;letter-spacing:.05em;margin-bottom:6px">${label}</div>
         ${gTasks.map(t=>`
-          <div style="border-radius:7px;background:${t.done?'#f0fdf4':'#f8fafc'};margin-bottom:4px;overflow:hidden">
-            <div style="display:flex;align-items:flex-start;gap:10px;padding:7px 10px">
-              <div style="width:18px;height:18px;border-radius:50%;border:2px solid ${t.done?'#10b981':'#cbd5e1'};background:${t.done?'#10b981':'#fff'};flex-shrink:0;display:flex;align-items:center;justify-content:center;margin-top:1px;cursor:pointer" onclick="toggleTmTask('${l.id}','${t.id}')">
+          <div style="border-radius:7px;background:${t.done?'#f0fdf4':'#f8fafc'};margin-bottom:4px">
+            <div style="display:flex;align-items:center;gap:10px;padding:7px 10px">
+              <div style="width:18px;height:18px;border-radius:50%;border:2px solid ${t.done?'#10b981':'#cbd5e1'};background:${t.done?'#10b981':'#fff'};flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer" onclick="toggleTmTask('${l.id}','${t.id}')">
                 ${t.done?'<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>':''}
               </div>
               <div style="flex:1;min-width:0">
                 <span style="font-size:13px;color:${t.done?'#64748b':'#1e293b'};${t.done?'text-decoration:line-through':''}">${escHtml(t.task)}</span>
-                <span style="font-size:11px;color:#94a3b8;margin-left:8px">${t.dueDate?new Date(t.dueDate+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}):''}</span>
-                ${t.notes?`<div style="font-size:12px;color:#475569;margin-top:4px;padding:4px 8px;background:#fff;border-left:2px solid #93c5fd;border-radius:0 4px 4px 0">${escHtml(t.notes)}</div>`:''}
+                <span style="font-size:11px;color:#94a3b8;margin-left:6px">${t.dueDate?new Date(t.dueDate+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}):''}</span>
               </div>
               <span style="font-size:11px;color:#64748b;flex-shrink:0;background:#e2e8f0;border-radius:4px;padding:1px 6px">${escHtml(t.owner||'')}</span>
-              <button onclick="editTmTaskNote('${l.id}','${t.id}')" title="Add comment" style="background:none;border:none;cursor:pointer;padding:1px 4px;border-radius:4px;color:${t.notes?'#3b82f6':'#cbd5e1'};font-size:14px;line-height:1;flex-shrink:0" onmouseover="this.style.color='#3b82f6'" onmouseout="this.style.color='${t.notes?'#3b82f6':'#cbd5e1'}'">💬</button>
+              <button onclick="editTmTaskNote('${l.id}','${t.id}')" style="flex-shrink:0;background:${t.notes?'#eff6ff':'none'};border:1px solid ${t.notes?'#bfdbfe':'#e2e8f0'};border-radius:5px;cursor:pointer;padding:2px 8px;font-size:11px;color:${t.notes?'#2563eb':'#94a3b8'};white-space:nowrap" onmouseover="this.style.borderColor='#93c5fd';this.style.color='#2563eb'" onmouseout="this.style.borderColor='${t.notes?'#bfdbfe':'#e2e8f0'}';this.style.color='${t.notes?'#2563eb':'#94a3b8'}'">✎ ${t.notes?'Edit note':'Add note'}</button>
             </div>
+            ${t.notes?`<div style="font-size:12px;color:#1e293b;padding:0 10px 8px 38px;line-height:1.5"><span style="background:#eff6ff;border-radius:4px;padding:3px 8px;display:inline-block">${escHtml(t.notes)}</span></div>`:''}
           </div>`).join('')}
       </div>`;
     }).join('');
@@ -4883,11 +4902,12 @@ function renderTMinus(){
         <div>
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
             <span style="font-size:16px;font-weight:700;color:#0f172a">${escHtml(l.doctorEvent)}</span>
-            ${l.launchType==='hospital'
-              ?'<span style="font-size:11px;font-weight:600;background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:20px">🏥 New Hospital</span>'
-              :'<span style="font-size:11px;font-weight:600;background:#ede9fe;color:#5b21b6;padding:2px 8px;border-radius:20px">🏠 New Office</span>'}
+            <button onclick="changeLaunchType('${l.id}')" title="Click to change launch type" style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;cursor:pointer;border:none;${l.launchType==='hospital'?'background:#fef3c7;color:#92400e':'background:#ede9fe;color:#5b21b6'}">${l.launchType==='hospital'?'🏥 New Hospital Start':'🏠 New Office Setup'} ✎</button>
           </div>
-          <div style="font-size:13px;color:#64748b;margin-top:2px">${escHtml(l.launchNote||'')}${ld?` · <span style="cursor:pointer;border-bottom:1px dashed #94a3b8" onclick="editLaunchDate('${l.id}')" title="Click to edit date">${ld.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}</span>`:` <span style="cursor:pointer;color:#3b82f6;font-size:12px" onclick="editLaunchDate('${l.id}')">[set date]</span>`}</div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:4px;flex-wrap:wrap">
+            <span style="font-size:13px;color:#64748b">${escHtml(l.launchNote||'')}</span>
+            <button onclick="editLaunchDate('${l.id}')" style="font-size:12px;font-weight:600;color:#2563eb;background:#eff6ff;border:1px solid #bfdbfe;border-radius:5px;padding:2px 8px;cursor:pointer">📅 ${ld?ld.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}):'Set first shift date'}</button>
+          </div>
           ${l.office?`<div style="font-size:12px;color:#94a3b8;margin-top:2px">📍 ${escHtml(l.office)}</div>`:''}
         </div>
         <div style="text-align:right;flex-shrink:0">
