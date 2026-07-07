@@ -3829,6 +3829,7 @@ function expiryBadge(ds){
 }
 function fmtDate(ds){if(!ds)return'—';return new Date(ds+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});}
 function avatarBg(name){return['#2563eb','#7c3aed','#059669','#d97706','#db2777'][(name||'?').charCodeAt(0)%5];}
+function lastFirst(name){if(!name)return'';const p=name.trim().split(/\s+/);if(p.length<2)return name;return p[p.length-1]+', '+p.slice(0,-1).join(' ');}
 
 function credProviderStatus(cid){
   const p=credentialing[cid]||{};
@@ -4719,42 +4720,43 @@ function renderTasks(){
         <div style="font-size:14px;font-weight:600;color:#64748b">No tasks found</div>
         <div style="font-size:12px;margin-top:4px">Adjust filters or <span style="color:var(--blue);cursor:pointer" onclick="openTaskModal(null)">add a new task</span></div>
       </div>`:`
-      <div class="table-wrap"><table>
+      <div class="table-wrap"><table style="min-width:1100px">
         <thead><tr>
-          <th style="width:36px"></th>
-          <th>Doctor / Contact</th>
-          <th>Hospital</th>
-          <th>Task</th>
-          <th>Category</th>
-          <th>Status</th>
-          <th>Priority</th>
-          <th>Assignee</th>
-          <th>Due Date</th>
-          <th>Last Update</th>
+          <th style="width:40px;padding:10px 8px"></th>
+          <th style="min-width:160px">Doctor / Contact</th>
+          <th style="min-width:140px">Hospital</th>
+          <th style="min-width:200px">Task</th>
+          <th style="min-width:120px">Category</th>
+          <th style="min-width:110px">Status</th>
+          <th style="min-width:90px">Priority</th>
+          <th style="min-width:130px">Assignee</th>
+          <th style="min-width:90px">Due Date</th>
+          <th style="min-width:180px">Last Update</th>
           <th style="width:70px"></th>
         </tr></thead>
         <tbody>${filtered.map(t=>{
           const st=STATUSES[t.status]||STATUSES.todo;
           const pr=PRIORITIES[t.priority]||PRIORITIES.medium;
           const isOverdue=t.status!=='done'&&t.dueDate&&new Date(t.dueDate)<now;
-          const dueStr=t.dueDate?new Date(t.dueDate+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}):'<span style="color:#94a3b8">—</span>';
+          const dueStr=t.dueDate?new Date(t.dueDate+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'2-digit'}):'<span style="color:#94a3b8">—</span>';
           const lastLog=t.log&&t.log.length?t.log[t.log.length-1]:null;
-          const lastStr=lastLog?(lastLog.text.length>55?lastLog.text.substring(0,55)+'…':lastLog.text):'—';
+          const lastStr=lastLog?(lastLog.text.length>60?lastLog.text.substring(0,60)+'…':lastLog.text):'—';
           const initials=(t.assignee||'?').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
           const ac=assigneeColor(t.assignee);
-          const ieCss='cursor:pointer;padding:8px 10px;transition:background .1s' + (t.status==='done'?';opacity:0.5':'');
+          const ieCss='cursor:pointer;padding:12px 14px;transition:background .1s;vertical-align:middle' + (t.status==='done'?';opacity:0.5':'');
+          const docDisplay=lastFirst(t.contactName||'');
           return `<tr style="${t.status==='done'?'opacity:0.5':''}">
-            <td onclick="quickToggleDone('${t.id}')">
+            <td style="padding:12px 8px;text-align:center;vertical-align:middle" onclick="quickToggleDone('${t.id}')">
               <div class="task-check${t.status==='done'?' done':''}" title="${t.status==='done'?'Reopen task':'Mark done'}">
                 ${t.status==='done'?'<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>':''}
               </div>
             </td>
             <td style="${ieCss}" onclick="inlineEditTask('${t.id}','contactId',this)" title="Click to change doctor">
-              <span style="font-weight:600;color:#1e293b">${escHtml(t.contactName||'—')}</span>
+              <span style="font-weight:600;color:#1e293b">${escHtml(docDisplay||'—')}</span>
               <span class="ie-hint">▾</span>
             </td>
             <td style="${ieCss}" onclick="inlineEditTask('${t.id}','hospital',this)" title="Click to edit">
-              <span style="font-weight:500;color:#1e293b">${escHtml(t.hospital||'—')}</span>
+              <span style="color:#374151">${escHtml(t.hospital||'—')}</span>
               <span class="ie-hint">✎</span>
             </td>
             <td style="${ieCss}" onclick="inlineEditTask('${t.id}','title',this)" title="Click to edit">
@@ -4762,11 +4764,11 @@ function renderTasks(){
               <span class="ie-hint">✎</span>
             </td>
             <td style="${ieCss}" onclick="inlineEditTask('${t.id}','category',this)" title="Click to change">
-              <span class="badge badge-gray" style="font-size:10px">${escHtml(t.category||'Other')}</span>
+              <span class="badge badge-gray">${escHtml(t.category||'Other')}</span>
               <span class="ie-hint">▾</span>
             </td>
             <td style="${ieCss}" onclick="inlineEditTask('${t.id}','status',this)" title="Click to change">
-              <span class="badge" style="background:${st.bg};color:${st.color};font-size:10px">${st.label}</span>
+              <span class="badge" style="background:${st.bg};color:${st.color}">${st.label}</span>
               <span class="ie-hint">▾</span>
             </td>
             <td style="${ieCss}" onclick="inlineEditTask('${t.id}','priority',this)" title="Click to change">
