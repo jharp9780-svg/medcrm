@@ -4608,9 +4608,13 @@ function saveNewProvider(){
   _db.ref('contacts/'+(contacts.length-1)).set(newC);
   invalidateCache();
   closeModal('add-provider-modal');
-  toast(`✓ ${name} added to credentialing`);
-  credView=newC.id; credTab='info';
-  renderProviderDetail(newC.id);
+  toast(`✓ ${name} added`);
+  if(currentView==='tasks'){
+    renderTasks();
+  } else {
+    credView=newC.id; credTab='info';
+    renderProviderDetail(newC.id);
+  }
 }
 
 function editProviderName(cid){
