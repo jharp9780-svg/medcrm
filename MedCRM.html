@@ -2029,31 +2029,39 @@ function renderPipeline(){
 // ══════════════════════════════════════════════
 // ACTIVITY LOG
 // ══════════════════════════════════════════════
-function renderActivity(){
+let _actPage=0;
+const ACT_PAGE_SIZE=50;
+function renderActivity(resetPage){
+  if(resetPage||resetPage===undefined) _actPage=0;
   const all=[...activities].sort((a,b)=>(b.date||'').localeCompare(a.date||'')||b.created-a.created);
+  const cMap=new Map(contacts.map(c=>[c.id,c]));
+  const pageItems=all.slice(0,(_actPage+1)*ACT_PAGE_SIZE);
+  const hasMore=all.length>pageItems.length;
+  const itemsHtml=pageItems.map(a=>{
+    const c=cMap.get(a.contactId);
+    return `<div class="activity-item">
+      <div class="activity-icon ${ACT_CLASSES[a.type]||'act-note'}">${ACT_ICONS[a.type]||'📝'}</div>
+      <div class="activity-body">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
+          <span class="activity-contact clickable" onclick="openDetail('${a.contactId}')">${c?escHtml(c.name):'Unknown'}</span>
+          ${c?`<span class="badge type-badge-${c.type}" style="font-size:10px">${c.type==='doctor'?'Dr':'Hosp'}</span>`:''}
+          ${c?`<span class="badge ${STAGE_COLORS[c.stage]||'badge-gray'}" style="font-size:10px">${c.stage}</span>`:''}
+        </div>
+        ${renderActivityDesc(a.desc)}
+        <div class="activity-meta">${formatDate(a.date)} · ${a.type}${c&&c.org?` · ${escHtml(c.org)}`:''}</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        <button class="btn btn-secondary btn-xs" onclick="openEditActivity('${a.id}')">Edit</button>
+        <button class="btn btn-danger btn-xs" onclick="deleteActivity('${a.id}')">Del</button>
+      </div>
+    </div>`;
+  }).join('');
   document.getElementById('content').innerHTML=`
     <div class="card">
       <div class="card-header"><div class="card-title">All Activity</div><span style="font-size:12px;color:var(--gray);margin-left:8px">${all.length} entries</span></div>
       <div style="padding:0 18px">
-        ${all.length?all.map(a=>{
-          const c=contacts.find(x=>x.id===a.contactId);
-          return `<div class="activity-item">
-            <div class="activity-icon ${ACT_CLASSES[a.type]||'act-note'}">${ACT_ICONS[a.type]||'📝'}</div>
-            <div class="activity-body">
-              <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
-                <span class="activity-contact clickable" onclick="openDetail('${a.contactId}')">${c?escHtml(c.name):'Unknown'}</span>
-                ${c?`<span class="badge type-badge-${c.type}" style="font-size:10px">${c.type==='doctor'?'Dr':'Hosp'}</span>`:''}
-                ${c?`<span class="badge ${STAGE_COLORS[c.stage]||'badge-gray'}" style="font-size:10px">${c.stage}</span>`:''}
-              </div>
-              ${renderActivityDesc(a.desc)}
-              <div class="activity-meta">${formatDate(a.date)} · ${a.type}${c&&c.org?` · ${escHtml(c.org)}`:''}</div>
-            </div>
-            <div style="display:flex;gap:6px;flex-shrink:0">
-              <button class="btn btn-secondary btn-xs" onclick="openEditActivity('${a.id}')">Edit</button>
-              <button class="btn btn-danger btn-xs" onclick="deleteActivity('${a.id}')">Del</button>
-            </div>
-          </div>`;
-        }).join(''):`<div class="empty"><div class="empty-icon">🕐</div><div class="empty-title">No activity logged</div><div class="empty-sub">Open a contact and log calls, emails, or meetings.</div></div>`}
+        ${all.length?itemsHtml+`${hasMore?`<div style="text-align:center;padding:20px"><button class="btn btn-secondary" onclick="_actPage++;renderActivity(false)">Load more (${all.length-pageItems.length} remaining)</button></div>`:''}`:
+        `<div class="empty"><div class="empty-icon">🕐</div><div class="empty-title">No activity logged</div><div class="empty-sub">Open a contact and log calls, emails, or meetings.</div></div>`}
       </div>
     </div>
   `;
