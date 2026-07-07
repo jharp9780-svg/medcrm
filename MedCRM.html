@@ -4710,6 +4710,7 @@ function toggleTmTask(launchId,taskId){
 
 function openNewLaunchModal(){
   document.getElementById('nl-doctor').value='';
+  document.getElementById('nl-office').value='';
   document.getElementById('nl-hospital').value='';
   document.getElementById('nl-date').value='';
   document.getElementById('nl-note').value='';
@@ -4718,6 +4719,7 @@ function openNewLaunchModal(){
 
 function saveNewLaunch(){
   const doctor=document.getElementById('nl-doctor').value.trim();
+  const office=document.getElementById('nl-office').value.trim();
   const hospital=document.getElementById('nl-hospital').value.trim();
   const dateVal=document.getElementById('nl-date').value.trim();
   const note=document.getElementById('nl-note').value.trim()||'1st Shift';
@@ -4731,7 +4733,7 @@ function saveNewLaunch(){
     due.setDate(due.getDate()+t.txDays);
     return{id:'tm_'+Date.now()+'_'+i,task:t.task,txDays:t.txDays,dueDate:due.toISOString().slice(0,10),owner:t.owner,done:false,notes:''};
   });
-  const launch={id:'tl_'+Date.now(),doctorEvent,launchDate:dateVal,launchNote:note,launchType:type,tasks,createdAt:Date.now()};
+  const launch={id:'tl_'+Date.now(),doctorEvent,doctor,office,hospital,launchDate:dateVal,launchNote:note,launchType:type,tasks,createdAt:Date.now()};
   tminusLaunches.push(launch);
   const idx=tminusLaunches.length-1;
   _db.ref('tminusLaunches/'+idx).set(launch);
@@ -4795,6 +4797,7 @@ function renderTMinus(){
               :'<span style="font-size:11px;font-weight:600;background:#ede9fe;color:#5b21b6;padding:2px 8px;border-radius:20px">🏠 New Office</span>'}
           </div>
           <div style="font-size:13px;color:#64748b;margin-top:2px">${escHtml(l.launchNote||'')}${ld?' · '+ld.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}):''}</div>
+          ${l.office?`<div style="font-size:12px;color:#94a3b8;margin-top:2px">📍 ${escHtml(l.office)}</div>`:''}
         </div>
         <div style="text-align:right;flex-shrink:0">
           ${!isPast&&daysUntil!==null?`<div style="font-size:22px;font-weight:800;color:${urgentColor}">${daysUntil===0?'TODAY!':countdownStr}</div><div style="font-size:11px;color:#94a3b8">${daysUntil>0?'days to launch':daysUntil===0?'launch day':'days past'}</div>`:''}
@@ -4820,6 +4823,31 @@ function renderTMinus(){
         </div>
         <button class="btn btn-primary" onclick="openNewLaunchModal()">+ New Launch</button>
       </div>
+      ${sorted.length?`
+      <div style="background:#fff;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;margin-bottom:28px">
+        <div style="background:#0f172a;padding:12px 18px;display:grid;grid-template-columns:2em 1fr 1fr 1fr 1fr;gap:12px;align-items:center">
+          <span style="font-size:11px;font-weight:700;color:#94a3b8">#</span>
+          <span style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em">Physician</span>
+          <span style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em">Office</span>
+          <span style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em">Client / Program</span>
+          <span style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em">First Shift Date</span>
+        </div>
+        ${sorted.map((l,i)=>{
+          const ld=l.launchDate?new Date(l.launchDate+'T00:00:00'):null;
+          const isPast=ld&&ld<today;
+          const daysUntil=ld?Math.round((ld-today)/(1000*60*60*24)):null;
+          const dateColor=isPast?'#94a3b8':daysUntil<=14?'#dc2626':daysUntil<=30?'#f59e0b':'#10b981';
+          const docName=l.doctor||l.doctorEvent.split(' - ')[0];
+          const hosp=l.hospital||l.launchNote||l.doctorEvent.split(' - ').slice(1).join(' - ')||'';
+          return `<div style="padding:11px 18px;display:grid;grid-template-columns:2em 1fr 1fr 1fr 1fr;gap:12px;align-items:center;border-top:1px solid #f1f5f9;background:${isPast?'#f8fafc':'#fff'}">
+            <span style="font-size:13px;color:#94a3b8;font-weight:600">${i+1}</span>
+            <span style="font-size:13px;font-weight:600;color:${isPast?'#94a3b8':'#0f172a'}">${escHtml(docName)}</span>
+            <span style="font-size:13px;color:#475569">${escHtml(l.office||'—')}</span>
+            <span style="font-size:13px;color:#475569">${escHtml(hosp||'—')}</span>
+            <span style="font-size:13px;font-weight:600;color:${dateColor}">${ld?ld.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—'}${!isPast&&daysUntil!==null?`<span style="font-size:11px;font-weight:400;color:${dateColor};margin-left:6px">(${daysUntil===0?'today':'T-'+daysUntil})</span>`:''}</span>
+          </div>`;
+        }).join('')}
+      </div>`:''}
       ${upcoming.length?`<h3 style="font-size:13px;font-weight:700;text-transform:uppercase;color:#64748b;letter-spacing:.05em;margin:0 0 12px">Upcoming (${upcoming.length})</h3>${upcoming.map(l=>launchCard(l,false)).join('')}`:'<p style="color:#94a3b8;text-align:center;padding:40px 0">No upcoming launches. Add one with + New Launch.</p>'}
       ${past.length?`<h3 style="font-size:13px;font-weight:700;text-transform:uppercase;color:#94a3b8;letter-spacing:.05em;margin:24px 0 12px">Past Launches (${past.length})</h3>${past.map(l=>launchCard(l,true)).join('')}`:''}
     </div>`;
@@ -5559,8 +5587,12 @@ function saveTaskFromModal(){
     <div style="display:flex;flex-direction:column;gap:14px">
       <div><label style="font-size:12px;font-weight:600;color:#475569;display:block;margin-bottom:4px">Doctor Name *</label>
         <input id="nl-doctor" placeholder="e.g. Anton Dela Cruz" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:7px;font-size:14px;outline:none;box-sizing:border-box" onfocus="this.style.borderColor='#93c5fd'" onblur="this.style.borderColor='var(--border)'"></div>
-      <div><label style="font-size:12px;font-weight:600;color:#475569;display:block;margin-bottom:4px">Hospital / Program</label>
-        <input id="nl-hospital" placeholder="e.g. Mercy Teleneurology" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:7px;font-size:14px;outline:none;box-sizing:border-box" onfocus="this.style.borderColor='#93c5fd'" onblur="this.style.borderColor='var(--border)'"></div>
+      <div style="display:flex;gap:10px">
+        <div style="flex:1"><label style="font-size:12px;font-weight:600;color:#475569;display:block;margin-bottom:4px">Office Location</label>
+          <input id="nl-office" placeholder="e.g. Modiin, Nairobi" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:7px;font-size:14px;outline:none;box-sizing:border-box" onfocus="this.style.borderColor='#93c5fd'" onblur="this.style.borderColor='var(--border)'"></div>
+        <div style="flex:1"><label style="font-size:12px;font-weight:600;color:#475569;display:block;margin-bottom:4px">Hospital / Program</label>
+          <input id="nl-hospital" placeholder="e.g. UCHealth" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:7px;font-size:14px;outline:none;box-sizing:border-box" onfocus="this.style.borderColor='#93c5fd'" onblur="this.style.borderColor='var(--border)'"></div>
+      </div>
       <div><label style="font-size:12px;font-weight:600;color:#475569;display:block;margin-bottom:4px">Launch Date (First Shift) *</label>
         <input id="nl-date" type="date" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:7px;font-size:14px;outline:none;box-sizing:border-box" onfocus="this.style.borderColor='#93c5fd'" onblur="this.style.borderColor='var(--border)'"></div>
       <div><label style="font-size:12px;font-weight:600;color:#475569;display:block;margin-bottom:4px">Launch Note</label>
