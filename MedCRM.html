@@ -4793,7 +4793,8 @@ function exportTMinusExcel(){
     if(l.launchDate) rows.push({due:new Date(l.launchDate+'T00:00:00'),event:l.doctorEvent,task:l.launchNote||'1st Shift',txDays:null,owner:'',done:false,notes:'',isLaunch:true});
   });
   rows.sort((a,b)=>!a.due?1:!b.due?-1:a.due-b.due);
-  const fmt=d=>d?d.toLocaleDateString('en-US',{day:'2-digit',month:'short',year:'2-digit'}).replace(/ /g,'-'):'';
+  const _MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const fmt=d=>d?`${d.getDate()}-${_MON[d.getMonth()]}-${String(d.getFullYear()).slice(-2)}`:'';
   const esc=s=>(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const col=(bg,fg='#000')=>`background:${bg};color:${fg}`;
   let html=`<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8">
