@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -3813,7 +3813,7 @@ let credSearchVal='';
 let credFilterVal='all';
 let credShowFormer=false;
 
-function saveProviderProfile(cid){_db.ref('credentialing/'+cid).set(credentialing[cid]||null);updateNavCounts();}
+function saveProviderProfile(cid){_db.ref('credentialing/'+cid).set(credentialing[cid]||null);}
 function gp(cid){if(!credentialing[cid])credentialing[cid]={};return credentialing[cid];}
 function credUid(){return 'c'+Date.now()+Math.random().toString(36).slice(2,5);}
 function daysUntil(ds){if(!ds)return null;return Math.ceil((new Date(ds)-new Date())/(864e5));}
@@ -4196,7 +4196,7 @@ function renderProviderDetail(cid){
 }
 
 function renderCredInfoTab(cid,p,c){
-  const fields=[['NPI Number',p.npi],['DEA Number',p.deaNumber],['DEA Expiry',fmtDate(p.deaExpiry)+(p.deaExpiry?' '+expiryBadge(p.deaExpiry):'')],['ECFMG Number',p.ecfmgNumber],['Date of Birth',fmtDate(p.dob)],['SSN Last 4',p.ssn4?'···· '+p.ssn4:null],['Medical School',p.medSchool],['Graduation Year',p.gradYear],['Residency / Fellowship',p.residency]];
+  const fields=[['NPI Number',p.npi],['DEA Number',p.deaNumber],['DEA Expiry',fmtDate(p.deaExpiry)+(p.deaExpiry?' '+expiryBadge(p.deaExpiry):'')],['ECFMG Number',p.ecfmgNumber],['Date of Birth',p.dob],['SSN Last 4',p.ssn4?'···· '+p.ssn4:null],['Medical School',p.medSchool],['Graduation Year',p.gradYear],['Residency',p.residency],['Fellowship',p.fellowship]];
   const allExp=[...Object.values(p.licenses||{}).map(l=>({label:(l.state||'?')+' License',expiry:l.expiry})),...Object.values(p.boards||{}).map(b=>({label:(b.specialty||'?')+' Board',expiry:b.expiry})),...Object.values(p.malpractice||{}).map(m=>({label:'Malpractice ('+(m.carrier||'?')+')',expiry:m.expiry})),...(p.deaExpiry?[{label:'DEA Certificate',expiry:p.deaExpiry}]:[])].filter(x=>x.expiry).sort((a,b)=>new Date(a.expiry)-new Date(b.expiry));
   return`
     <div class="card" style="padding:22px;margin-bottom:16px">
@@ -4527,11 +4527,11 @@ function openCredInfoEdit(cid){
       <div class="form-group"><label>DEA Number</label><input type="text" id="cii-dea" value="${escHtml(p.deaNumber||'')}" placeholder="e.g. AB1234567"></div>
     </div>
     <div class="form-row">
-      <div class="form-group"><label>DEA Expiry</label><input type="date" id="cii-deaExpiry" value="${p.deaExpiry||''}"></div>
+      <div class="form-group"><label>DEA Expiry</label><input type="text" id="cii-deaExpiry" value="${escHtml(p.deaExpiry||'')}" placeholder="MM/DD/YYYY"></div>
       <div class="form-group"><label>ECFMG Number</label><input type="text" id="cii-ecfmg" value="${escHtml(p.ecfmgNumber||'')}"></div>
     </div>
     <div class="form-row">
-      <div class="form-group"><label>Date of Birth</label><input type="date" id="cii-dob" value="${p.dob||''}"></div>
+      <div class="form-group"><label>Date of Birth</label><input type="text" id="cii-dob" value="${escHtml(p.dob||'')}" placeholder="MM/DD/YYYY"></div>
       <div class="form-group"><label>SSN Last 4</label><input type="text" id="cii-ssn4" value="${escHtml(p.ssn4||'')}" maxlength="4" placeholder="####"></div>
     </div>
     <div class="form-row">
@@ -4539,7 +4539,8 @@ function openCredInfoEdit(cid){
       <div class="form-group"><label>Graduation Year</label><input type="text" id="cii-gradYear" value="${escHtml(p.gradYear||'')}" placeholder="YYYY"></div>
     </div>
     <div class="form-row">
-      <div class="form-group full"><label>Residency / Fellowship</label><input type="text" id="cii-residency" value="${escHtml(p.residency||'')}" placeholder="e.g. Johns Hopkins Neurology Residency 2015–2018"></div>
+      <div class="form-group"><label>Residency</label><input type="text" id="cii-residency" value="${escHtml(p.residency||'')}" placeholder="e.g. Johns Hopkins Neurology Residency 2015–2018"></div>
+      <div class="form-group"><label>Fellowship</label><input type="text" id="cii-fellowship" value="${escHtml(p.fellowship||'')}" placeholder="e.g. Critical Care Fellowship 2018–2020"></div>
     </div>`;
   openModal('cred-info-modal');
 }
@@ -4556,13 +4557,13 @@ function saveCredInfo(){
   p.medSchool=document.getElementById('cii-medSchool').value.trim();
   p.gradYear=document.getElementById('cii-gradYear').value.trim();
   p.residency=document.getElementById('cii-residency').value.trim();
+  p.fellowship=document.getElementById('cii-fellowship').value.trim();
   saveProviderProfile(cid);toast('✓ Provider details saved');closeModal('cred-info-modal');renderProviderDetail(cid);
 }
 
 function confirmMarkFormer(cid){
   const c=contacts.find(x=>x.id===cid);
   if(!c) return;
-  if(!confirm(`Mark ${c.name} as a former employee?\n\nTheir credentialing records will be kept but they will be removed from the active list.`)) return;
   setProviderStage(cid,'Former');
 }
 
@@ -4739,7 +4740,7 @@ function openTaskModal(id){
 
   const TEAM=[...new Set(['Neelima Clement','Oryan Amsalem','Becky Lushi',...crmTasks.map(x=>x.assignee).filter(Boolean)])];
   const CATEGORIES=['Licensing','Credentialing','Onboarding','Contracting','Other'];
-  const doctorOpts=contacts.filter(c=>c.name).sort((a,b)=>(a.name||'').localeCompare(b.name||''))
+  const doctorOpts=contacts.filter(c=>c.name&&c.stage==='Hired').sort((a,b)=>(a.name||'').localeCompare(b.name||''))
     .map(c=>`<option value="${c.id}" ${t.contactId===c.id?'selected':''}>${escHtml(c.name)}</option>`).join('');
 
   document.getElementById('task-modal-body').innerHTML=`
