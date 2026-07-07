@@ -4740,6 +4740,7 @@ function saveTmLaunch(launch){
   if(idx>=0) _db.ref('tminusLaunches/'+idx).set(launch);
 }
 
+let _tmOpenCards=new Set();
 function toggleTmTask(launchId,taskId){
   const launch=tminusLaunches.find(x=>x.id===launchId);
   if(!launch) return;
@@ -4749,7 +4750,35 @@ function toggleTmTask(launchId,taskId){
   task.done=!task.done;
   launch.tasks=tasks;
   saveTmLaunch(launch);
+  // capture which cards are open before re-render
+  document.querySelectorAll('details[data-lid]').forEach(d=>{if(d.open)_tmOpenCards.add(d.dataset.lid);else _tmOpenCards.delete(d.dataset.lid);});
   renderTMinus();
+}
+function editLaunchDate(launchId){
+  const launch=tminusLaunches.find(x=>x.id===launchId);
+  if(!launch) return;
+  const cur=launch.launchDate||'';
+  const inp=document.createElement('input');
+  inp.type='date'; inp.value=cur;
+  inp.style.cssText='position:fixed;opacity:0;pointer-events:none';
+  document.body.appendChild(inp);
+  inp.showPicker&&inp.showPicker();
+  inp.focus();
+  inp.onchange=()=>{
+    const val=inp.value;
+    document.body.removeChild(inp);
+    if(!val||val===cur) return;
+    launch.launchDate=val;
+    // recalculate task due dates from new launch date
+    const ld=new Date(val+'T00:00:00');
+    toArr(launch.tasks).forEach(t=>{
+      if(t.txDays!=null){const d=new Date(ld);d.setDate(d.getDate()+t.txDays);t.dueDate=d.toISOString().slice(0,10);}
+    });
+    saveTmLaunch(launch);
+    document.querySelectorAll('details[data-lid]').forEach(d=>{if(d.open)_tmOpenCards.add(d.dataset.lid);else _tmOpenCards.delete(d.dataset.lid);});
+    renderTMinus();
+  };
+  inp.onblur=()=>{setTimeout(()=>{if(inp.parentNode)document.body.removeChild(inp);},200);};
 }
 
 function openNewLaunchModal(){
@@ -4840,7 +4869,7 @@ function renderTMinus(){
               ?'<span style="font-size:11px;font-weight:600;background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:20px">🏥 New Hospital</span>'
               :'<span style="font-size:11px;font-weight:600;background:#ede9fe;color:#5b21b6;padding:2px 8px;border-radius:20px">🏠 New Office</span>'}
           </div>
-          <div style="font-size:13px;color:#64748b;margin-top:2px">${escHtml(l.launchNote||'')}${ld?' · '+ld.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}):''}</div>
+          <div style="font-size:13px;color:#64748b;margin-top:2px">${escHtml(l.launchNote||'')}${ld?` · <span style="cursor:pointer;border-bottom:1px dashed #94a3b8" onclick="editLaunchDate('${l.id}')" title="Click to edit date">${ld.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}</span>`:` <span style="cursor:pointer;color:#3b82f6;font-size:12px" onclick="editLaunchDate('${l.id}')">[set date]</span>`}</div>
           ${l.office?`<div style="font-size:12px;color:#94a3b8;margin-top:2px">📍 ${escHtml(l.office)}</div>`:''}
         </div>
         <div style="text-align:right;flex-shrink:0">
@@ -4852,7 +4881,7 @@ function renderTMinus(){
         <div style="display:flex;justify-content:space-between;font-size:12px;color:#64748b;margin-bottom:4px"><span>${done}/${total} tasks complete</span><span>${pct}%</span></div>
         <div style="height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${pct===100?'#10b981':'#3b82f6'};border-radius:3px;transition:width .3s"></div></div>
       </div>
-      <details style="cursor:pointer"><summary style="font-size:13px;color:#3b82f6;font-weight:500;list-style:none;user-select:none">▸ ${total} prep tasks</summary>
+      <details data-lid="${l.id}" style="cursor:pointer"><summary style="font-size:13px;color:#3b82f6;font-weight:500;list-style:none;user-select:none">▸ ${total} prep tasks</summary>
         <div style="margin-top:12px">${groupHtml}</div>
       </details>
     </div>`;
@@ -4895,6 +4924,8 @@ function renderTMinus(){
       ${upcoming.length?`<h3 style="font-size:13px;font-weight:700;text-transform:uppercase;color:#64748b;letter-spacing:.05em;margin:0 0 12px">Upcoming (${upcoming.length})</h3>${upcoming.map(l=>launchCard(l,false)).join('')}`:'<p style="color:#94a3b8;text-align:center;padding:40px 0">No upcoming launches. Add one with + New Launch.</p>'}
       ${past.length?`<h3 style="font-size:13px;font-weight:700;text-transform:uppercase;color:#94a3b8;letter-spacing:.05em;margin:24px 0 12px">Past Launches (${past.length})</h3>${past.map(l=>launchCard(l,true)).join('')}`:''}
     </div>`;
+  // restore open details panels
+  el.querySelectorAll('details[data-lid]').forEach(d=>{if(_tmOpenCards.has(d.dataset.lid))d.open=true;});
 }
 // ─── END T-MINUS ───────────────────────────────────────────────
 
