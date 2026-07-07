@@ -733,6 +733,7 @@ const _db      = firebase.database();
 const _storage = firebase.storage();
 
 let contacts=[], activities=[], documents=[], crmTasks=[], credentialing={}, tminusLaunches=[];
+function toArr(v){if(!v) return [];if(Array.isArray(v)) return v;return Object.values(v);}
 let hospitalList=['Avel','Baptist Memorial','BayCare','Boston Medical Center','Comanche County Memorial Hospital','Cone','Froedtert','Glenwood','Holy Family','Medical Center of Southeast Texas','Mercy vICU','Mercy EEG on Call','Mercy Teleneurology','Mercy vHospitalist','Mercy Virtual Nursing','Ochsner','Orlando Health','OSF','Remote Seat 1','Sentara','TCH','UCHealth','UK','Valley View Hospital'];
 function saveHospitalList(){_db.ref('hospitalList').set(hospitalList);}
 let _dupCache=null;
