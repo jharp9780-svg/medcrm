@@ -907,7 +907,7 @@ function showView(v){
   currentView=v;
   document.querySelectorAll('.nav-item').forEach(el=>el.classList.remove('active'));
   document.getElementById('nav-'+v)?.classList.add('active');
-  const titles={dashboard:'Home',contacts:'Contacts',pipeline:'Pipeline',activity:'Activity Log',tasks:'Task Tracker',credentialing:'Credentialing',crmstats:'CRM Analytics'};
+  const titles={dashboard:'Home',contacts:'Contacts',pipeline:'Pipeline',activity:'Activity Log',tasks:'Task Tracker',credentialing:'Credentialing',crmstats:'CRM Analytics',tminus:'T-Minus'};
   document.getElementById('page-title').textContent=titles[v]||v;
   document.getElementById('global-search').value='';
   searchQuery='';
@@ -4778,7 +4778,7 @@ function saveNewLaunch(){
 }
 
 function renderTMinus(){
-  const el=document.getElementById('main-content');
+  const el=document.getElementById('content');
   if(!el) return;
   const today=new Date(); today.setHours(0,0,0,0);
 
