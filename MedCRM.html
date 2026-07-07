@@ -4662,7 +4662,8 @@ function saveCrmTaskById(id){
 }
 
 // ─── T-MINUS ────────────────────────────────────────────────────
-const TMINUS_TEMPLATE=[
+// New Office Setup — first shift ever, or moving to a new office (14 tasks)
+const TMINUS_TEMPLATE_OFFICE=[
   {txDays:-75,task:'Office lease signing',owner:'Eli'},
   {txDays:-75,task:'Line ordering',owner:'Eli'},
   {txDays:-21,task:'Electrical cabling – quality and layout checked',owner:'Nir'},
@@ -4674,6 +4675,17 @@ const TMINUS_TEMPLATE=[
   {txDays:-14,task:'Main line – completion of quality testing',owner:'Nir'},
   {txDays:-14,task:'Backup line – completion of quality testing',owner:'Nir'},
   {txDays:-14,task:'Check of UPS/Generator Readiness',owner:'Nir'},
+  {txDays:-14,task:'Phone testing-Main and Back-Up',owner:'Nir'},
+  {txDays:-14,task:'Main Station - IT applications quality check',owner:'Nir'},
+  {txDays:-14,task:'Backup Station - IT applications quality check',owner:'Nir'},
+];
+// New Hospital Start — doctor already with us, starting at a new hospital (8 tasks)
+const TMINUS_TEMPLATE_HOSPITAL=[
+  {txDays:-21,task:'Onsite equipment readiness',owner:'Eli'},
+  {txDays:-21,task:'All Usernames and Passwords Issued',owner:'Eli'},
+  {txDays:-21,task:'All Usernames and Passwords Checked',owner:'Nir'},
+  {txDays:-14,task:'Main line – completion of quality testing',owner:'Nir'},
+  {txDays:-14,task:'Backup line – completion of quality testing',owner:'Nir'},
   {txDays:-14,task:'Phone testing-Main and Back-Up',owner:'Nir'},
   {txDays:-14,task:'Main Station - IT applications quality check',owner:'Nir'},
   {txDays:-14,task:'Backup Station - IT applications quality check',owner:'Nir'},
@@ -4709,15 +4721,17 @@ function saveNewLaunch(){
   const hospital=document.getElementById('nl-hospital').value.trim();
   const dateVal=document.getElementById('nl-date').value.trim();
   const note=document.getElementById('nl-note').value.trim()||'1st Shift';
+  const type=document.querySelector('input[name="nl-type"]:checked').value;
   if(!doctor||!dateVal){toast('Doctor name and launch date are required');return;}
   const launchDate=new Date(dateVal+'T00:00:00');
   const doctorEvent=hospital?`${doctor} - ${hospital}`:doctor;
-  const tasks=TMINUS_TEMPLATE.map((t,i)=>{
+  const template=type==='office'?TMINUS_TEMPLATE_OFFICE:TMINUS_TEMPLATE_HOSPITAL;
+  const tasks=template.map((t,i)=>{
     const due=new Date(launchDate);
     due.setDate(due.getDate()+t.txDays);
     return{id:'tm_'+Date.now()+'_'+i,task:t.task,txDays:t.txDays,dueDate:due.toISOString().slice(0,10),owner:t.owner,done:false,notes:''};
   });
-  const launch={id:'tl_'+Date.now(),doctorEvent,launchDate:dateVal,launchNote:note,tasks,createdAt:Date.now()};
+  const launch={id:'tl_'+Date.now(),doctorEvent,launchDate:dateVal,launchNote:note,launchType:type,tasks,createdAt:Date.now()};
   tminusLaunches.push(launch);
   const idx=tminusLaunches.length-1;
   _db.ref('tminusLaunches/'+idx).set(launch);
@@ -4774,7 +4788,12 @@ function renderTMinus(){
     return `<div style="background:#fff;border-radius:12px;border:1px solid ${isPast?'#e2e8f0':'#e0f2fe'};padding:20px;margin-bottom:16px;${isPast?'opacity:0.7':''}">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
         <div>
-          <div style="font-size:16px;font-weight:700;color:#0f172a">${escHtml(l.doctorEvent)}</div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="font-size:16px;font-weight:700;color:#0f172a">${escHtml(l.doctorEvent)}</span>
+            ${l.launchType==='hospital'
+              ?'<span style="font-size:11px;font-weight:600;background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:20px">🏥 New Hospital</span>'
+              :'<span style="font-size:11px;font-weight:600;background:#ede9fe;color:#5b21b6;padding:2px 8px;border-radius:20px">🏠 New Office</span>'}
+          </div>
           <div style="font-size:13px;color:#64748b;margin-top:2px">${escHtml(l.launchNote||'')}${ld?' · '+ld.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}):''}</div>
         </div>
         <div style="text-align:right;flex-shrink:0">
@@ -5546,7 +5565,20 @@ function saveTaskFromModal(){
         <input id="nl-date" type="date" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:7px;font-size:14px;outline:none;box-sizing:border-box" onfocus="this.style.borderColor='#93c5fd'" onblur="this.style.borderColor='var(--border)'"></div>
       <div><label style="font-size:12px;font-weight:600;color:#475569;display:block;margin-bottom:4px">Launch Note</label>
         <input id="nl-note" placeholder="e.g. 1st Mercy Shift" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:7px;font-size:14px;outline:none;box-sizing:border-box" onfocus="this.style.borderColor='#93c5fd'" onblur="this.style.borderColor='var(--border)'"></div>
-      <p style="margin:0;font-size:12px;color:#94a3b8">14 prep tasks will be auto-generated at T-75, T-21, and T-14 intervals.</p>
+      <div>
+        <label style="font-size:12px;font-weight:600;color:#475569;display:block;margin-bottom:8px">Launch Type *</label>
+        <div style="display:flex;gap:10px">
+          <label style="flex:1;display:flex;align-items:flex-start;gap:9px;padding:12px;border:2px solid #e2e8f0;border-radius:8px;cursor:pointer;transition:border-color .15s" id="nl-type-office-wrap">
+            <input type="radio" name="nl-type" value="office" checked style="margin-top:2px;accent-color:#3b82f6" onchange="document.getElementById('nl-type-office-wrap').style.borderColor='#3b82f6';document.getElementById('nl-type-hosp-wrap').style.borderColor='#e2e8f0';document.getElementById('nl-task-hint').textContent='14 tasks: T-75, T-21, T-14'">
+            <div><div style="font-size:13px;font-weight:600;color:#1e293b">🏠 New Office Setup</div><div style="font-size:11px;color:#64748b;margin-top:2px">First shift ever, or moving to a new office</div></div>
+          </label>
+          <label style="flex:1;display:flex;align-items:flex-start;gap:9px;padding:12px;border:2px solid #e2e8f0;border-radius:8px;cursor:pointer;transition:border-color .15s" id="nl-type-hosp-wrap">
+            <input type="radio" name="nl-type" value="hospital" style="margin-top:2px;accent-color:#3b82f6" onchange="document.getElementById('nl-type-hosp-wrap').style.borderColor='#3b82f6';document.getElementById('nl-type-office-wrap').style.borderColor='#e2e8f0';document.getElementById('nl-task-hint').textContent='8 tasks: T-21, T-14'">
+            <div><div style="font-size:13px;font-weight:600;color:#1e293b">🏥 New Hospital Start</div><div style="font-size:11px;color:#64748b;margin-top:2px">Already with us, starting at a new hospital</div></div>
+          </label>
+        </div>
+        <p id="nl-task-hint" style="margin:6px 0 0;font-size:11px;color:#94a3b8">14 tasks: T-75, T-21, T-14</p>
+      </div>
     </div>
     <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:22px">
       <button class="btn btn-secondary" onclick="document.getElementById('new-launch-modal').style.display='none'">Cancel</button>
