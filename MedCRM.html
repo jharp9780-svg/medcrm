@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -147,6 +147,13 @@ textarea{resize:vertical;min-height:80px}
 .field-map-row{display:grid;grid-template-columns:1fr 24px 1fr;gap:8px;align-items:center;margin-bottom:8px;font-size:13px}
 .field-map-arrow{text-align:center;color:var(--gray);font-size:16px}
 .csv-preview-table{width:100%;border-collapse:collapse;font-size:11px;margin-top:8px}
+/* Task Tracker */
+.stat-red{color:var(--red)}
+.task-check{width:20px;height:20px;border-radius:50%;border:2px solid #cbd5e1;background:transparent;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .15s;flex-shrink:0}
+.task-check:hover{border-color:#93c5fd;background:#eff6ff}
+.task-check.done{border-color:#16a34a;background:#16a34a}
+.tm-log-entry{padding:10px 0;border-bottom:1px solid #f1f5f9}
+.tm-log-entry:last-child{border-bottom:none}
 .csv-preview-table th,.csv-preview-table td{padding:4px 8px;border:1px solid var(--border);text-align:left}
 .csv-preview-table th{background:#f1f5f9;font-weight:600}
 .doc-item{display:flex;align-items:center;gap:10px;padding:8px 12px;background:#f8fafc;border:1px solid var(--border);border-radius:7px;margin-bottom:6px}
@@ -246,6 +253,10 @@ textarea{resize:vertical;min-height:80px}
       </div>
       <div class="nav-item" onclick="showView('activity')" id="nav-activity">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Activity Log
+      </div>
+      <div class="nav-item" onclick="showView('tasks')" id="nav-tasks">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Task Tracker
+        <span class="nav-count" id="nav-count-tasks" style="display:none">0</span>
       </div>
     </div>
     <div class="nav-section" style="border-top:1px solid #334155">
@@ -710,7 +721,7 @@ const _auth    = firebase.auth();
 const _db      = firebase.database();
 const _storage = firebase.storage();
 
-let contacts=[], activities=[], documents=[];
+let contacts=[], activities=[], documents=[], crmTasks=[];
 let _dupCache=null;
 function invalidateCache(){_dupCache=null;}
 
@@ -824,12 +835,14 @@ _auth.onAuthStateChanged(async user=>{
   }
 
   // Load activities and documents in background, then render once with everything
-  const [aSnap,dSnap]=await Promise.all([
+  const [aSnap,dSnap,tSnap]=await Promise.all([
     _db.ref('activities').once('value'),
-    _db.ref('documents').once('value')
+    _db.ref('documents').once('value'),
+    _db.ref('crmtasks').once('value')
   ]);
   activities=toArr(aSnap.val());
   documents=toArr(dSnap.val());
+  crmTasks=toArr(tSnap.val());
   render();
   autoImportSfNotes();
 });
@@ -874,7 +887,7 @@ function showView(v){
   currentView=v;
   document.querySelectorAll('.nav-item').forEach(el=>el.classList.remove('active'));
   document.getElementById('nav-'+v)?.classList.add('active');
-  const titles={dashboard:'Dashboard',contacts:'Contacts',pipeline:'Pipeline',activity:'Activity Log'};
+  const titles={dashboard:'Dashboard',contacts:'Contacts',pipeline:'Pipeline',activity:'Activity Log',tasks:'Task Tracker'};
   document.getElementById('page-title').textContent=titles[v]||v;
   document.getElementById('global-search').value='';
   searchQuery='';
@@ -891,6 +904,7 @@ function render(){
   else if(currentView==='pipeline') renderPipeline();
   else if(currentView==='activity') renderActivity();
   else if(currentView==='dedup') renderDedup();
+  else if(currentView==='tasks') renderTasks();
 }
 function updateNavCounts(){
   document.getElementById('nav-count-contacts').textContent=contacts.length;
@@ -906,6 +920,9 @@ function updateNavCounts(){
   const dupCount=_dupCache.length;
   const dupEl=document.getElementById('nav-count-dups');
   if(dupEl){dupEl.textContent=dupCount;dupEl.style.display=dupCount?'':'none';}
+  const openTasks=crmTasks.filter(t=>t.status!=='done').length;
+  const tasksEl=document.getElementById('nav-count-tasks');
+  if(tasksEl){tasksEl.textContent=openTasks;tasksEl.style.display=openTasks?'':'none';}
 }
 
 function normalize(s){return(s||'').toLowerCase().replace(/\s+/g,' ').trim();}
@@ -3616,7 +3633,307 @@ function deleteNote(contactId,ts){
   refreshNotesLog(c);
   toast('Note deleted');
 }
+
+// ===== TASK TRACKER =====
+let tasksFilter={status:'open',assignee:'',category:'',search:''};
+
+function saveCrmTasks(){_db.ref('crmtasks').set(crmTasks);updateNavCounts();}
+function saveCrmTaskById(id){
+  const i=crmTasks.findIndex(t=>t.id===id);
+  if(i>=0) _db.ref('crmtasks/'+i).set(crmTasks[i]);
+  updateNavCounts();
+}
+
+function renderTasks(){
+  const STATUSES={
+    todo:{label:'To Do',color:'#64748b',bg:'#f1f5f9'},
+    inprogress:{label:'In Progress',color:'#2563eb',bg:'#dbeafe'},
+    blocked:{label:'Blocked',color:'#dc2626',bg:'#fee2e2'},
+    done:{label:'Done',color:'#16a34a',bg:'#dcfce7'}
+  };
+  const PRIORITIES={high:{label:'High',color:'#dc2626'},medium:{label:'Medium',color:'#d97706'},low:{label:'Low',color:'#64748b'}};
+  const PALETTE=['#2563eb','#7c3aed','#059669','#d97706','#db2777','#0891b2'];
+  const allAssignees=[...new Set(crmTasks.map(t=>t.assignee).filter(Boolean))];
+  const assigneeColor=a=>PALETTE[allAssignees.indexOf(a)%PALETTE.length]||'#64748b';
+  const CATEGORIES=['Licensing','Credentialing','Onboarding','Contracting','Other'];
+  const now=new Date();
+
+  let filtered=crmTasks.filter(t=>{
+    if(tasksFilter.status==='open'&&t.status==='done') return false;
+    if(tasksFilter.status==='done'&&t.status!=='done') return false;
+    if(tasksFilter.status&&!['open','done','all'].includes(tasksFilter.status)&&t.status!==tasksFilter.status) return false;
+    if(tasksFilter.assignee&&t.assignee!==tasksFilter.assignee) return false;
+    if(tasksFilter.category&&t.category!==tasksFilter.category) return false;
+    if(tasksFilter.search){const q=tasksFilter.search.toLowerCase();if(!(t.title||'').toLowerCase().includes(q)&&!(t.contactName||'').toLowerCase().includes(q)) return false;}
+    return true;
+  });
+  filtered.sort((a,b)=>{
+    if(a.status==='done'&&b.status!=='done') return 1;
+    if(b.status==='done'&&a.status!=='done') return -1;
+    if(a.dueDate&&b.dueDate) return new Date(a.dueDate)-new Date(b.dueDate);
+    if(a.dueDate) return -1; if(b.dueDate) return 1; return 0;
+  });
+
+  const openCount=crmTasks.filter(t=>t.status!=='done').length;
+  const overdueCount=crmTasks.filter(t=>t.status!=='done'&&t.dueDate&&new Date(t.dueDate)<now).length;
+  const blockedCount=crmTasks.filter(t=>t.status==='blocked').length;
+  const weekAgo=new Date(now-7*24*60*60*1000);
+  const doneWeek=crmTasks.filter(t=>t.status==='done'&&t.doneAt&&new Date(t.doneAt)>=weekAgo).length;
+
+  document.getElementById('content').innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <div>
+        <h2 style="font-size:20px;font-weight:700;color:#1e293b">Task Tracker</h2>
+        <p style="font-size:13px;color:#64748b;margin-top:2px">Credentialing, licensing &amp; onboarding tasks</p>
+      </div>
+      <button class="btn btn-primary" onclick="openTaskModal(null)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        New Task
+      </button>
+    </div>
+    <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px">
+      <div class="stat-card"><div class="stat-label">Open Tasks</div><div class="stat-value stat-blue">${openCount}</div><div class="stat-sub">of ${crmTasks.length} total</div></div>
+      <div class="stat-card"><div class="stat-label">Overdue</div><div class="stat-value stat-red">${overdueCount}</div><div class="stat-sub">past due date</div></div>
+      <div class="stat-card"><div class="stat-label">Blocked</div><div class="stat-value stat-amber">${blockedCount}</div><div class="stat-sub">need attention</div></div>
+      <div class="stat-card"><div class="stat-label">Done This Week</div><div class="stat-value stat-green">${doneWeek}</div><div class="stat-sub">completed</div></div>
+    </div>
+    <div class="filter-bar" style="margin-bottom:16px">
+      <input type="text" placeholder="Search tasks or doctor..." value="${escHtml(tasksFilter.search)}"
+        oninput="tasksFilter.search=this.value;renderTasks()"
+        style="padding:7px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;outline:none;width:220px">
+      <select class="filter-select" onchange="tasksFilter.status=this.value;renderTasks()">
+        <option value="open" ${tasksFilter.status==='open'?'selected':''}>Open Tasks</option>
+        <option value="all" ${tasksFilter.status==='all'?'selected':''}>All Tasks</option>
+        <option value="todo" ${tasksFilter.status==='todo'?'selected':''}>To Do</option>
+        <option value="inprogress" ${tasksFilter.status==='inprogress'?'selected':''}>In Progress</option>
+        <option value="blocked" ${tasksFilter.status==='blocked'?'selected':''}>Blocked</option>
+        <option value="done" ${tasksFilter.status==='done'?'selected':''}>Done</option>
+      </select>
+      <select class="filter-select" onchange="tasksFilter.assignee=this.value;renderTasks()">
+        <option value="">All Assignees</option>
+        ${allAssignees.map(a=>`<option value="${escHtml(a)}" ${tasksFilter.assignee===a?'selected':''}>${escHtml(a)}</option>`).join('')}
+      </select>
+      <select class="filter-select" onchange="tasksFilter.category=this.value;renderTasks()">
+        <option value="">All Categories</option>
+        ${CATEGORIES.map(c=>`<option value="${c}" ${tasksFilter.category===c?'selected':''}>${c}</option>`).join('')}
+      </select>
+      <span style="font-size:12px;color:#64748b;margin-left:4px">${filtered.length} task${filtered.length!==1?'s':''}</span>
+    </div>
+    <div class="card">
+      ${filtered.length===0?`<div style="padding:56px;text-align:center;color:#94a3b8">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="1.5" style="margin-bottom:12px"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        <div style="font-size:14px;font-weight:600;color:#64748b">No tasks found</div>
+        <div style="font-size:12px;margin-top:4px">Adjust filters or <span style="color:var(--blue);cursor:pointer" onclick="openTaskModal(null)">add a new task</span></div>
+      </div>`:`
+      <div class="table-wrap"><table>
+        <thead><tr>
+          <th style="width:36px"></th>
+          <th>Doctor / Contact</th>
+          <th>Task / System</th>
+          <th>Category</th>
+          <th>Status</th>
+          <th>Priority</th>
+          <th>Assignee</th>
+          <th>Due Date</th>
+          <th>Last Update</th>
+          <th style="width:50px"></th>
+        </tr></thead>
+        <tbody>${filtered.map(t=>{
+          const st=STATUSES[t.status]||STATUSES.todo;
+          const pr=PRIORITIES[t.priority]||PRIORITIES.medium;
+          const isOverdue=t.status!=='done'&&t.dueDate&&new Date(t.dueDate)<now;
+          const dueStr=t.dueDate?new Date(t.dueDate+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}):'—';
+          const lastLog=t.log&&t.log.length?t.log[t.log.length-1]:null;
+          const lastStr=lastLog?(lastLog.text.length>55?lastLog.text.substring(0,55)+'…':lastLog.text):'—';
+          const initials=(t.assignee||'?').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
+          const ac=assigneeColor(t.assignee);
+          return `<tr class="clickable" onclick="openTaskModal('${t.id}')" style="${t.status==='done'?'opacity:0.5':''}">
+            <td onclick="event.stopPropagation();quickToggleDone('${t.id}')">
+              <div class="task-check${t.status==='done'?' done':''}" title="${t.status==='done'?'Reopen task':'Mark done'}">
+                ${t.status==='done'?'<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>':''}
+              </div>
+            </td>
+            <td style="font-weight:600;color:#1e293b">${escHtml(t.contactName||'—')}</td>
+            <td style="font-weight:500;color:#1e293b">${escHtml(t.title)}</td>
+            <td><span class="badge badge-gray" style="font-size:10px">${escHtml(t.category||'Other')}</span></td>
+            <td><span class="badge" style="background:${st.bg};color:${st.color};font-size:10px">${st.label}</span></td>
+            <td style="font-size:12px;font-weight:700;color:${pr.color}">${pr.label}</td>
+            <td>${t.assignee?`<div style="display:flex;align-items:center;gap:6px"><div style="width:26px;height:26px;border-radius:50%;background:${ac};color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${initials}</div><span style="font-size:12px">${escHtml(t.assignee.split(' ')[0])}</span></div>`:'<span style="color:#94a3b8">—</span>'}</td>
+            <td style="font-size:12px;font-weight:${isOverdue?700:400};color:${isOverdue?'#dc2626':'#374151'}">${isOverdue?'⚠ ':''}${dueStr}</td>
+            <td style="font-size:11px;color:#64748b;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(lastStr)}</td>
+            <td onclick="event.stopPropagation()"><button class="btn btn-xs btn-danger" onclick="deleteCrmTask('${t.id}')">✕</button></td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table></div>`}
+    </div>`;
+}
+
+function quickToggleDone(id){
+  const t=crmTasks.find(x=>x.id===id);
+  if(!t) return;
+  if(t.status==='done'){t.status='todo';delete t.doneAt;}
+  else{
+    t.status='done';t.doneAt=Date.now();
+    if(!t.log) t.log=[];
+    t.log.push({ts:Date.now(),text:'Marked as complete',author:(_auth.currentUser&&_auth.currentUser.displayName)||''});
+  }
+  saveCrmTaskById(id);renderTasks();
+}
+
+function deleteCrmTask(id){
+  if(!confirm('Delete this task?')) return;
+  crmTasks=crmTasks.filter(t=>t.id!==id);
+  saveCrmTasks();renderTasks();
+}
+
+function openTaskModal(id){
+  const isNew=!id;
+  const t=isNew?{
+    id:'ct_'+Date.now()+Math.random().toString(36).slice(2,6),
+    title:'',contactId:'',contactName:'',assignee:'',
+    status:'todo',priority:'medium',dueDate:'',category:'Credentialing',
+    log:[],createdAt:Date.now()
+  }:crmTasks.find(x=>x.id===id);
+  if(!t) return;
+
+  const TEAM=[...new Set(['Neelima Clement','Oryan Amsalem','Becky Lushi',...crmTasks.map(x=>x.assignee).filter(Boolean)])];
+  const CATEGORIES=['Licensing','Credentialing','Onboarding','Contracting','Other'];
+  const doctorOpts=contacts.filter(c=>c.name).sort((a,b)=>(a.name||'').localeCompare(b.name||''))
+    .map(c=>`<option value="${c.id}" ${t.contactId===c.id?'selected':''}>${escHtml(c.name)}</option>`).join('');
+
+  document.getElementById('task-modal-body').innerHTML=`
+    <input type="hidden" id="tm-id" value="${escHtml(t.id)}">
+    <div class="form-row">
+      <div class="form-group full">
+        <label>Task / System Name *</label>
+        <input type="text" id="tm-title" value="${escHtml(t.title)}" placeholder="e.g. Mercy Neurology License">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Doctor / Contact</label>
+        <select id="tm-contact"><option value="">— None —</option>${doctorOpts}</select>
+      </div>
+      <div class="form-group">
+        <label>Category</label>
+        <select id="tm-category">${CATEGORIES.map(c=>`<option value="${c}" ${t.category===c?'selected':''}>${c}</option>`).join('')}</select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Status</label>
+        <select id="tm-status">
+          <option value="todo" ${t.status==='todo'?'selected':''}>To Do</option>
+          <option value="inprogress" ${t.status==='inprogress'?'selected':''}>In Progress</option>
+          <option value="blocked" ${t.status==='blocked'?'selected':''}>Blocked</option>
+          <option value="done" ${t.status==='done'?'selected':''}>Done</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Priority</label>
+        <select id="tm-priority">
+          <option value="high" ${t.priority==='high'?'selected':''}>High</option>
+          <option value="medium" ${t.priority==='medium'?'selected':''}>Medium</option>
+          <option value="low" ${t.priority==='low'?'selected':''}>Low</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Assignee (RICU Owner)</label>
+        <input type="text" id="tm-assignee" value="${escHtml(t.assignee||'')}" list="tm-assignee-list" placeholder="Name">
+        <datalist id="tm-assignee-list">${TEAM.map(n=>`<option value="${escHtml(n)}">`).join('')}</datalist>
+      </div>
+      <div class="form-group">
+        <label>Due Date</label>
+        <input type="date" id="tm-duedate" value="${t.dueDate||''}">
+      </div>
+    </div>
+    <div style="border-top:1px solid var(--border);padding-top:16px">
+      <div style="font-size:11px;font-weight:700;color:#1e293b;margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px">Action Log</div>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <input type="text" id="tm-log-input" placeholder="Add an update (e.g. 5-July submitted application to Kay)..."
+          style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();addTaskLogEntry();}">
+        <button class="btn btn-primary btn-sm" onclick="addTaskLogEntry()">Add Update</button>
+      </div>
+      <div id="tm-log-entries" style="max-height:260px;overflow-y:auto">
+        ${renderTaskLog(t)}
+      </div>
+    </div>`;
+
+  document.getElementById('task-modal-title').textContent=isNew?'New Task':t.title||'Edit Task';
+  openModal('task-modal');
+}
+
+function renderTaskLog(t){
+  if(!t.log||!t.log.length) return '<div style="font-size:12px;color:#94a3b8;padding:8px 0">No updates yet — add one above</div>';
+  return t.log.slice().reverse().map(l=>`
+    <div class="tm-log-entry">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
+        <span style="font-size:10px;color:#64748b;font-weight:600">${new Date(l.ts).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</span>
+        ${l.author?`<span style="font-size:10px;color:#94a3b8">· ${escHtml(l.author)}</span>`:''}
+      </div>
+      <div style="font-size:13px;color:#374151;line-height:1.5;white-space:pre-wrap">${escHtml(l.text)}</div>
+    </div>`).join('');
+}
+
+function addTaskLogEntry(){
+  const input=document.getElementById('tm-log-input');
+  const text=(input.value||'').trim();
+  if(!text) return;
+  const id=document.getElementById('tm-id').value;
+  // Auto-save task first if new
+  let t=crmTasks.find(x=>x.id===id);
+  if(!t){saveTaskFromModal();t=crmTasks.find(x=>x.id===id);if(!t) return;}
+  if(!t.log) t.log=[];
+  t.log.push({ts:Date.now(),text,author:(_auth.currentUser&&_auth.currentUser.displayName)||''});
+  saveCrmTaskById(id);
+  input.value='';
+  const el=document.getElementById('tm-log-entries');
+  if(el) el.innerHTML=renderTaskLog(t);
+  toast('Update added');
+}
+
+function saveTaskFromModal(){
+  const id=document.getElementById('tm-id').value;
+  const title=(document.getElementById('tm-title').value||'').trim();
+  if(!title){toast('Task name is required');return;}
+  const contactId=document.getElementById('tm-contact').value;
+  const contactName=contactId?(contacts.find(c=>c.id===contactId)||{}).name||'':'';
+  let t=crmTasks.find(x=>x.id===id);
+  const isNew=!t;
+  if(isNew){t={id,log:[],createdAt:Date.now()};crmTasks.push(t);}
+  t.title=title;
+  t.contactId=contactId;
+  t.contactName=contactName;
+  t.category=document.getElementById('tm-category').value;
+  t.status=document.getElementById('tm-status').value;
+  t.priority=document.getElementById('tm-priority').value;
+  t.assignee=(document.getElementById('tm-assignee').value||'').trim();
+  t.dueDate=document.getElementById('tm-duedate').value;
+  t.updatedAt=Date.now();
+  if(t.status==='done'&&!t.doneAt) t.doneAt=Date.now();
+  saveCrmTasks();
+  toast(isNew?'✓ Task created':'✓ Task saved');
+  closeModal('task-modal');
+  if(currentView==='tasks') renderTasks();
+}
 </script>
+
+<!-- Task Tracker Modal -->
+<div id="task-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeModal('task-modal')">
+  <div class="modal" style="max-width:680px">
+    <div class="modal-header">
+      <span class="modal-title" id="task-modal-title">New Task</span>
+      <button class="close-btn" onclick="closeModal('task-modal')">✕</button>
+    </div>
+    <div class="modal-body" id="task-modal-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('task-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveTaskFromModal()">Save Task</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
 
