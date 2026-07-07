@@ -646,7 +646,7 @@ Referred by Dr. Marcus Lee" oninput="runSmartParse()"></textarea>
 // DATA LAYER
 // ══════════════════════════════════════════════
 // Doctor = recruiting pipeline; Hospital = contract sales pipeline
-const DOCTOR_STAGES=['Prospect','Reached Out','Intro Call Done','Contract Sent','Contract Signed','Client Interview','Hired','Not Interested','Not Board Certified'];
+const DOCTOR_STAGES=['Prospect','Reached Out','Intro Call Done','Contract Sent','Contract Signed','Client Interview','Hired','Former','Not Interested','Not Board Certified'];
 const HOSPITAL_STAGES=['Prospect','Reached Out','Meeting Scheduled','Proposal Sent','Negotiating','Contract Signed','Not Interested'];
 const STAFF_STAGES=['Active Contact','Reached Out','Met','Not Responsive','Not Interested'];
 const STAGES=[...new Set([...DOCTOR_STAGES,...HOSPITAL_STAGES,...STAFF_STAGES])];
@@ -3678,7 +3678,8 @@ function credProviderStatus(cid){
 
 function renderCredentialing(){
   if(credView){renderProviderDetail(credView);return;}
-  const providers=contacts.filter(c=>c.name).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  const showFormer=(document.getElementById('cred-show-former')||{}).checked||false;
+  const providers=contacts.filter(c=>c.name&&(c.stage==='Hired'||(showFormer&&c.stage==='Former'))).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
   const expiredCount=providers.filter(p=>credProviderStatus(p.id)==='expired').length;
   const soonCount=providers.filter(p=>credProviderStatus(p.id)==='soon').length;
 
@@ -3711,7 +3712,10 @@ function renderCredentialing(){
         <option value="expiring" ${filterVal==='expiring'?'selected':''}>Expiring / Expired</option>
         <option value="expired" ${filterVal==='expired'?'selected':''}>Expired Only</option>
       </select>
-      <span style="font-size:12px;color:#64748b">${filtered.length} provider${filtered.length!==1?'s':''}</span>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#64748b;cursor:pointer;margin-left:4px">
+        <input type="checkbox" id="cred-show-former" ${showFormer?'checked':''} onchange="renderCredentialing()"> Show Former
+      </label>
+      <span style="font-size:12px;color:#64748b;margin-left:4px">${filtered.length} provider${filtered.length!==1?'s':''}</span>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px">
       ${filtered.map(c=>{
@@ -3763,10 +3767,16 @@ function renderProviderDetail(cid){
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
       <button class="btn btn-secondary btn-sm" onclick="credView=null;renderCredentialing()">← Back</button>
       <div style="width:44px;height:44px;border-radius:50%;background:${avatarBg(c.name)};color:#fff;font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${ini}</div>
-      <div>
-        <div style="font-size:18px;font-weight:700;color:#1e293b">${escHtml(c.name)}</div>
+      <div style="flex:1">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:18px;font-weight:700;color:#1e293b">${escHtml(c.name)}</span>
+          ${c.stage==='Former'?'<span class="badge badge-gray">Former</span>':''}
+        </div>
         <div style="font-size:12px;color:#64748b">${escHtml(c.specialty||'')}${c.org?' · '+escHtml(c.org):''}</div>
       </div>
+      ${c.stage==='Former'
+        ?`<button class="btn btn-success btn-sm" onclick="setProviderStage('${cid}','Hired')">↩ Restore as Active</button>`
+        :`<button class="btn btn-danger btn-sm" onclick="confirmMarkFormer('${cid}')">Mark as Former</button>`}
     </div>
     <div class="tabs" style="margin-bottom:20px">
       ${TABS.map(([v,l])=>`<div class="tab${credTab===v?' active':''}" onclick="credTab='${v}';renderProviderDetail('${cid}')">${l}${counts[v]?`<span style="background:#e2e8f0;border-radius:8px;font-size:10px;padding:1px 5px;margin-left:4px">${counts[v]}</span>`:''}</div>`).join('')}
@@ -4136,6 +4146,23 @@ function saveCredInfo(){
   p.gradYear=document.getElementById('cii-gradYear').value.trim();
   p.residency=document.getElementById('cii-residency').value.trim();
   saveProviderProfile(cid);toast('✓ Provider details saved');closeModal('cred-info-modal');renderProviderDetail(cid);
+}
+
+function confirmMarkFormer(cid){
+  const c=contacts.find(x=>x.id===cid);
+  if(!c) return;
+  if(!confirm(`Mark ${c.name} as a former employee?\n\nTheir credentialing records will be kept but they will be removed from the active list.`)) return;
+  setProviderStage(cid,'Former');
+}
+
+function setProviderStage(cid,stage){
+  const c=contacts.find(x=>x.id===cid);
+  if(!c) return;
+  c.stage=stage;
+  saveContactById(cid);
+  toast(stage==='Former'?`✓ ${c.name} marked as former employee`:`✓ ${c.name} restored as active`);
+  renderProviderDetail(cid);
+  updateNavCounts();
 }
 
 // ===== TASK TRACKER =====
