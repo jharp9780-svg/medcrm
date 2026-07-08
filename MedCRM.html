@@ -5422,26 +5422,29 @@ function inlineEditTask(id, field, el){
       else save(v);
     };
   } else if(field==='hospital'){
+    const hwrap=document.createElement('div'); hwrap.style.cssText='position:relative;display:inline-block;min-width:160px;width:100%';
     w=document.createElement('input'); w.type='text'; w.value=t[field]||'';
-    w.placeholder='Hospital…'; w.style.cssText=s+'min-width:160px;width:100%';
+    w.placeholder='Hospital…'; w.style.cssText=s+'width:100%';
     const hsugg=document.createElement('div');
-    hsugg.style.cssText='position:fixed;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.15);z-index:9999;max-height:220px;overflow-y:auto;display:none';
-    document.body.appendChild(hsugg);
-    const posH=()=>{const r=w.getBoundingClientRect();hsugg.style.left=r.left+'px';hsugg.style.width=Math.max(r.width,180)+'px';const below=r.bottom+4;hsugg.style.top=(below+220>window.innerHeight&&r.top>220?(r.top-Math.min(220,hospitalList.length*38+8)):below)+'px';};
+    hsugg.style.cssText='position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.15);z-index:9999;max-height:220px;overflow-y:auto;display:none;margin-top:2px';
     const renderH=val=>{
       const q=(val||'').toLowerCase();
       const hits=hospitalList.filter(h=>!q||h.toLowerCase().includes(q));
       if(!hits.length){hsugg.style.display='none';return;}
       hsugg.innerHTML=hits.map(h=>`<div class="dd-item" data-h="${escHtml(h)}" style="padding:8px 14px;font-size:13px;cursor:pointer;color:#1e293b;border-bottom:1px solid #f1f5f9" onmousedown="event.preventDefault()" onmouseenter="this.style.background='#eff6ff'" onmouseleave="this.style.background=''">${escHtml(h)}</div>`).join('');
-      hsugg.style.display='block'; posH();
+      hsugg.style.display='block';
     };
-    const cleanH=()=>{if(hsugg.parentNode)hsugg.parentNode.removeChild(hsugg);};
     w.oninput=()=>renderH(w.value);
     w.onfocus=()=>renderH(w.value);
-    w.onkeydown=e=>{if(e.key==='Enter'){cleanH();save(w.value.trim());}if(e.key==='Escape'){cleanH();cancel();}};
-    w.onblur=()=>{setTimeout(()=>{if(el.dataset.editing){cleanH();save(w.value.trim());}},180);};
-    hsugg.onclick=e=>{const d=e.target.closest('[data-h]');if(d){cleanH();save(d.dataset.h);}};
+    w.onkeydown=e=>{if(e.key==='Enter'){hsugg.style.display='none';save(w.value.trim());}if(e.key==='Escape'){hsugg.style.display='none';cancel();}};
+    w.onblur=()=>{setTimeout(()=>{if(el.dataset.editing){hsugg.style.display='none';save(w.value.trim());}},180);};
+    hsugg.onclick=e=>{const d=e.target.closest('[data-h]');if(d){hsugg.style.display='none';save(d.dataset.h);}};
     _ddNav(w,hsugg);
+    hwrap.appendChild(w); hwrap.appendChild(hsugg);
+    el.innerHTML=''; el.appendChild(hwrap); w.focus();
+    const len=w.value.length; w.setSelectionRange(len,len);
+    renderH(w.value);
+    return;
   } else {
     // title — free text
     w=document.createElement('input'); w.type='text'; w.value=t[field]||'';
