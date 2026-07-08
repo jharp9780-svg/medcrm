@@ -5289,6 +5289,13 @@ function renderTasks(){
     </div>`;
   const ts=document.getElementById('task-search');
   if(ts){const len=ts.value.length;ts.focus({preventScroll:true});ts.setSelectionRange(len,len);}
+  // wire arrow-key nav for custom dropdowns in quick-add bar
+  const hospInp=document.getElementById('qa-hospital');
+  const hospDd=document.getElementById('qa-hosp-dd');
+  if(hospInp&&hospDd) _ddNav(hospInp,hospDd);
+  const docInp=document.getElementById('qa-doc-input');
+  const docDd=document.getElementById('qa-doc-dropdown');
+  if(docInp&&docDd) _ddNav(docInp,docDd);
 }
 
 function inlineEditTask(id, field, el){
@@ -5378,7 +5385,7 @@ function inlineEditTask(id, field, el){
       const q=(val||'').toLowerCase();
       const matches=TEAM.filter(n=>!q||n.toLowerCase().includes(q));
       if(!matches.length){sugg.style.display='none';return;}
-      sugg.innerHTML=matches.map(n=>`<div data-name="${escHtml(n)}" style="padding:7px 12px;font-size:13px;cursor:pointer;color:#374151" onmousedown="event.preventDefault()" onmouseenter="this.style.background='#eff6ff'" onmouseleave="this.style.background=''">${escHtml(n)}</div>`).join('');
+      sugg.innerHTML=matches.map(n=>`<div class="dd-item" data-name="${escHtml(n)}" style="padding:7px 12px;font-size:13px;cursor:pointer;color:#374151" onmousedown="event.preventDefault()" onmouseenter="this.style.background='#eff6ff'" onmouseleave="this.style.background=''">${escHtml(n)}</div>`).join('');
       sugg.style.display='block';
     };
     w.oninput=()=>renderSugg(w.value);
@@ -5386,6 +5393,7 @@ function inlineEditTask(id, field, el){
     w.onkeydown=e=>{if(e.key==='Enter'){save(w.value.trim());sugg.style.display='none';} if(e.key==='Escape') cancel();};
     w.onblur=()=>{setTimeout(()=>{save(w.value.trim());},150);};
     sugg.onclick=e=>{const d=e.target.closest('[data-name]');if(d){save(d.dataset.name);sugg.style.display='none';}};
+    _ddNav(w,sugg);
     wrap.appendChild(w); wrap.appendChild(sugg);
     el.innerHTML=''; el.appendChild(wrap); w.focus();
     const len=w.value.length; w.setSelectionRange(len,len);
@@ -5424,7 +5432,7 @@ function inlineEditTask(id, field, el){
       const q=(val||'').toLowerCase();
       const hits=hospitalList.filter(h=>!q||h.toLowerCase().includes(q));
       if(!hits.length){hsugg.style.display='none';return;}
-      hsugg.innerHTML=hits.map(h=>`<div data-h="${escHtml(h)}" style="padding:8px 14px;font-size:13px;cursor:pointer;color:#1e293b;border-bottom:1px solid #f1f5f9" onmousedown="event.preventDefault()" onmouseenter="this.style.background='#eff6ff'" onmouseleave="this.style.background=''">${escHtml(h)}</div>`).join('');
+      hsugg.innerHTML=hits.map(h=>`<div class="dd-item" data-h="${escHtml(h)}" style="padding:8px 14px;font-size:13px;cursor:pointer;color:#1e293b;border-bottom:1px solid #f1f5f9" onmousedown="event.preventDefault()" onmouseenter="this.style.background='#eff6ff'" onmouseleave="this.style.background=''">${escHtml(h)}</div>`).join('');
       hsugg.style.display='block'; posH();
     };
     const cleanH=()=>{if(hsugg.parentNode)hsugg.parentNode.removeChild(hsugg);};
@@ -5433,6 +5441,7 @@ function inlineEditTask(id, field, el){
     w.onkeydown=e=>{if(e.key==='Enter'){cleanH();save(w.value.trim());}if(e.key==='Escape'){cleanH();cancel();}};
     w.onblur=()=>{setTimeout(()=>{if(el.dataset.editing){cleanH();save(w.value.trim());}},180);};
     hsugg.onclick=e=>{const d=e.target.closest('[data-h]');if(d){cleanH();save(d.dataset.h);}};
+    _ddNav(w,hsugg);
   } else {
     // title — free text
     w=document.createElement('input'); w.type='text'; w.value=t[field]||'';
@@ -5450,13 +5459,29 @@ function inlineEditTask(id, field, el){
 
 let _qaDocId='',_qaDocName='';
 
+// Arrow-key navigation for any custom div dropdown
+function _ddNav(inp, ddEl){
+  let ci=-1;
+  const its=()=>[...ddEl.querySelectorAll('.dd-item')];
+  const hi=()=>{its().forEach((el,i)=>el.style.background=i===ci?'#dbeafe':'');const a=its();if(ci>=0&&a[ci])a[ci].scrollIntoView({block:'nearest'});};
+  new MutationObserver(()=>{ci=-1;}).observe(ddEl,{childList:true});
+  const orig=inp.onkeydown;
+  inp.onkeydown=e=>{
+    const a=its(); const vis=ddEl.style.display!=='none'&&a.length>0;
+    if(e.key==='ArrowDown'&&vis){e.preventDefault();ci=Math.min(ci+1,a.length-1);hi();}
+    else if(e.key==='ArrowUp'&&vis){e.preventDefault();ci=Math.max(ci-1,-1);hi();}
+    else if(e.key==='Enter'&&vis&&ci>=0){e.preventDefault();e.stopPropagation();a[ci].click();ci=-1;}
+    else{ci=-1;if(orig)orig.call(inp,e);}
+  };
+}
+
 function qaHospitalSearch(val){
   const dd=document.getElementById('qa-hosp-dd');
   if(!dd) return;
   const q=(val||'').toLowerCase();
   const hits=hospitalList.filter(h=>!q||h.toLowerCase().includes(q));
   if(!hits.length){dd.style.display='none';return;}
-  dd.innerHTML=hits.map(h=>`<div onclick="document.getElementById('qa-hospital').value='${escHtml(h).replace(/'/g,"&#39;")}';document.getElementById('qa-hosp-dd').style.display='none'" style="padding:8px 12px;cursor:pointer;font-size:13px;color:#1e293b;border-bottom:1px solid #f1f5f9" onmouseenter="this.style.background='#eff6ff'" onmouseleave="this.style.background=''">${escHtml(h)}</div>`).join('');
+  dd.innerHTML=hits.map(h=>`<div class="dd-item" onclick="document.getElementById('qa-hospital').value='${escHtml(h).replace(/'/g,"&#39;")}';document.getElementById('qa-hosp-dd').style.display='none'" style="padding:8px 12px;cursor:pointer;font-size:13px;color:#1e293b;border-bottom:1px solid #f1f5f9" onmouseenter="this.style.background='#eff6ff'" onmouseleave="this.style.background=''">${escHtml(h)}</div>`).join('');
   dd.style.display='block';
 }
 
@@ -5490,12 +5515,12 @@ function taskDocSearch(val){
   if(!dd) return;
   const q=(val||'').trim().toLowerCase();
   const hired=contacts.filter(c=>c.name&&c.stage==='Hired');
-  const specRow=(id,label)=>`<div onclick="selectQADoctor('${id}','${label}')" style="padding:8px 12px;cursor:pointer;font-size:13px;color:#64748b;font-style:italic;border-bottom:1px solid #f1f5f9" onmouseenter="this.style.background='#f8fafc'" onmouseleave="this.style.background=''">${label}</div>`;
+  const specRow=(id,label)=>`<div class="dd-item" onclick="selectQADoctor('${id}','${label}')" style="padding:8px 12px;cursor:pointer;font-size:13px;color:#64748b;font-style:italic;border-bottom:1px solid #f1f5f9" onmouseenter="this.style.background='#f8fafc'" onmouseleave="this.style.background=''">${label}</div>`;
   const specials=(!q||'no doctor'.includes(q)||'multiple'.includes(q))?[specRow('__none__','— No Doctor'),specRow('__multi__','Multiple Doctors')]:[];
   const matches=hired.filter(c=>(c.name||'').toLowerCase().includes(q)).slice(0,8);
   if(!specials.length&&!matches.length){dd.style.display='none';return;}
   dd.innerHTML=specials.join('')+matches.map(c=>`
-    <div onclick="selectQADoctor('${c.id}','${escHtml(c.name).replace(/'/g,"&#39;")}')"
+    <div class="dd-item" onclick="selectQADoctor('${c.id}','${escHtml(c.name).replace(/'/g,"&#39;")}')"
       style="padding:8px 12px;cursor:pointer;font-size:13px;color:#1e293b;border-bottom:1px solid #f1f5f9"
       onmouseenter="this.style.background='#eff6ff'" onmouseleave="this.style.background=''">
       <span style="font-weight:500">${escHtml(c.name)}</span>
