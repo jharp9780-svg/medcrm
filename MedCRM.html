@@ -5059,17 +5059,23 @@ function renderTMinus(){
           <span style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em">US Date<br><span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:10px">Assigned Desired FS (US) or Best Estimate</span></span>
         </div>
         ${upcoming.map((l,i)=>{
+          const li=tminusLaunches.indexOf(l);
           const ld=l.launchDate?new Date(l.launchDate+'T00:00:00'):null;
           const daysUntil=ld?Math.round((ld-today)/(1000*60*60*24)):null;
           const dateColor=daysUntil!==null&&daysUntil<=14?'#dc2626':daysUntil!==null&&daysUntil<=30?'#f59e0b':'#10b981';
           const docName=l.doctor||l.doctorEvent.split(' - ')[0];
           const hosp=l.hospital||l.launchNote||l.doctorEvent.split(' - ').slice(1).join(' - ')||'';
+          const dateLabel=ld?ld.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'Set date';
           return `<div style="padding:11px 18px;display:grid;grid-template-columns:2em 1fr 1fr 1fr 1fr;gap:12px;align-items:center;border-top:1px solid #f1f5f9">
             <span style="font-size:13px;color:#94a3b8;font-weight:600">${i+1}</span>
             <span style="font-size:13px;font-weight:600;color:#0f172a">${escHtml(docName)}</span>
             <span style="font-size:13px;color:#475569">${escHtml(l.office||'—')}</span>
             <span style="font-size:13px;color:#475569">${escHtml(hosp||'—')}</span>
-            <span style="font-size:13px;font-weight:600;color:${dateColor}">${ld?ld.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—'}${daysUntil!==null?`<span style="font-size:11px;font-weight:400;color:${dateColor};margin-left:6px">(${daysUntil===0?'today':'T-'+daysUntil})</span>`:''}</span>
+            <span style="position:relative;display:inline-flex;align-items:center;gap:6px">
+              <button onclick="const i=document.getElementById('tbl-ld-${li}');if(i){if(i.showPicker)i.showPicker();else i.focus();}" style="font-size:13px;font-weight:600;color:${dateColor};background:none;border:none;cursor:pointer;padding:0;text-decoration:underline dotted">${dateLabel}</button>
+              ${daysUntil!==null?`<span style="font-size:11px;font-weight:400;color:${dateColor}">(${daysUntil===0?'today':'T-'+daysUntil})</span>`:''}
+              <input id="tbl-ld-${li}" type="date" value="${l.launchDate||''}" onchange="updateLaunchDate(${li},this.value)" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0">
+            </span>
           </div>`;
         }).join('')}
         ${past.length?`<div id="tm-past-table-rows" style="display:none">${past.map((l,i)=>{
