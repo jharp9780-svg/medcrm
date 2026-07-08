@@ -5016,10 +5016,10 @@ function renderTMinus(){
           </div>
           <div style="display:flex;align-items:center;gap:8px;margin-top:4px;flex-wrap:wrap">
             <span style="font-size:13px;color:#64748b">${escHtml(l.launchNote||'')}</span>
-            <label style="position:relative;display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;color:#2563eb;background:#eff6ff;border:1px solid #bfdbfe;border-radius:5px;padding:2px 8px;cursor:pointer">
+            <button onclick="const i=document.getElementById('ld-inp-${li}');if(i){if(i.showPicker)i.showPicker();else i.focus();}" style="display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;color:#2563eb;background:#eff6ff;border:1px solid #bfdbfe;border-radius:5px;padding:2px 8px;cursor:pointer">
               📅 <span>${ld?ld.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}):'Set first shift date'}</span>
-              <input type="date" value="${l.launchDate||''}" onchange="updateLaunchDate(${li},this.value)" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%">
-            </label>
+            </button>
+            <input id="ld-inp-${li}" type="date" value="${l.launchDate||''}" onchange="updateLaunchDate(${li},this.value)" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0">
           </div>
           ${l.office?`<div style="font-size:12px;color:#94a3b8;margin-top:2px">📍 ${escHtml(l.office)}</div>`:''}
         </div>
