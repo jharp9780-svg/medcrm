@@ -4735,24 +4735,26 @@ const TMINUS_TEMPLATE_HOSPITAL=[
   {txDays:-14,task:'Backup Station - IT applications quality check',owner:'Nir'},
 ];
 
-function saveTmLaunch(launch){
-  const idx=tminusLaunches.findIndex(x=>x.id===launch.id);
-  if(idx>=0) _db.ref('tminusLaunches/'+idx).set(launch);
+function saveTmLaunch(launch,idx){
+  // idx is the tminusLaunches array index = Firebase path index
+  const i=idx!=null?idx:tminusLaunches.indexOf(launch);
+  if(i>=0) _db.ref('tminusLaunches/'+i).set(launch);
 }
 
 let _tmOpenCards=new Set();
 const _TM_CHECK_SVG='<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>';
-function toggleTmTask(launchId,taskId){
-  const launch=tminusLaunches.find(x=>x.id===launchId);
+function toggleTmTask(launchIdx,taskId){
+  const li=parseInt(launchIdx,10);
+  const launch=tminusLaunches[li];
   if(!launch) return;
   const tasks=toArr(launch.tasks);
   const task=tasks.find(x=>x.id===taskId);
   if(!task) return;
   task.done=!task.done;
   launch.tasks=tasks;
-  saveTmLaunch(launch);
+  saveTmLaunch(launch,li);
   // update just the task row — no re-render
-  const row=document.querySelector(`[data-lid="${launchId}"][data-tid="${taskId}"]`);
+  const row=document.querySelector(`[data-li="${li}"][data-tid="${taskId}"]`);
   if(row){
     const d=task.done;
     row.style.background=d?'#f0fdf4':'#f8fafc';
@@ -4765,9 +4767,9 @@ function toggleTmTask(launchId,taskId){
   const done=tasks.filter(t=>t.done).length;
   const total=tasks.length;
   const pct=total?Math.round(done/total*100):0;
-  const pt=document.getElementById('tm-prog-text-'+launchId);
-  const pp=document.getElementById('tm-prog-pct-'+launchId);
-  const pb=document.getElementById('tm-prog-bar-'+launchId);
+  const pt=document.getElementById('tm-prog-text-'+li);
+  const pp=document.getElementById('tm-prog-pct-'+li);
+  const pb=document.getElementById('tm-prog-bar-'+li);
   if(pt) pt.textContent=done+'/'+total+' tasks complete';
   if(pp) pp.textContent=pct+'%';
   if(pb){pb.style.width=pct+'%';pb.style.background=pct===100?'#10b981':'#3b82f6';}
@@ -4876,8 +4878,8 @@ function exportTMinusExcel(){
   a.click();
   URL.revokeObjectURL(a.href);
 }
-function changeLaunchType(launchId){
-  const launch=tminusLaunches.find(x=>x.id===launchId);
+function changeLaunchType(li){
+  const launch=tminusLaunches[li];
   if(!launch) return;
   const cur=launch.launchType==='hospital'?'hospital':'office';
   const next=cur==='hospital'?'office':'hospital';
@@ -4891,12 +4893,12 @@ function changeLaunchType(launchId){
     const due=new Date(ld); due.setDate(due.getDate()+t.txDays);
     return{id:'tm_'+ts+'_'+i,task:t.task,txDays:t.txDays,dueDate:due.toISOString().slice(0,10),owner:t.owner,done:false,notes:''};
   });
-  saveTmLaunch(launch);
-  document.querySelectorAll('details[data-lid]').forEach(d=>{if(d.open)_tmOpenCards.add(d.dataset.lid);else _tmOpenCards.delete(d.dataset.lid);});
+  saveTmLaunch(launch,li);
+  document.querySelectorAll('details[data-li]').forEach(d=>{if(d.open)_tmOpenCards.add(d.dataset.li);else _tmOpenCards.delete(d.dataset.li);});
   renderTMinus();
 }
-function editTmTaskNote(launchId,taskId){
-  const launch=tminusLaunches.find(x=>x.id===launchId);
+function editTmTaskNote(li,taskId){
+  const launch=tminusLaunches[li];
   if(!launch) return;
   const tasks=toArr(launch.tasks);
   const task=tasks.find(x=>x.id===taskId);
@@ -4905,20 +4907,20 @@ function editTmTaskNote(launchId,taskId){
   if(note===null) return;
   task.notes=note.trim();
   launch.tasks=tasks;
-  saveTmLaunch(launch);
-  document.querySelectorAll('details[data-lid]').forEach(d=>{if(d.open)_tmOpenCards.add(d.dataset.lid);else _tmOpenCards.delete(d.dataset.lid);});
+  saveTmLaunch(launch,li);
+  document.querySelectorAll('details[data-li]').forEach(d=>{if(d.open)_tmOpenCards.add(d.dataset.li);else _tmOpenCards.delete(d.dataset.li);});
   renderTMinus();
 }
-function updateLaunchDate(launchId,val){
-  const launch=tminusLaunches.find(x=>x.id===launchId);
+function updateLaunchDate(li,val){
+  const launch=tminusLaunches[li];
   if(!launch||!val||val===launch.launchDate) return;
   launch.launchDate=val;
   const ld=new Date(val+'T00:00:00');
   toArr(launch.tasks).forEach(t=>{
     if(t.txDays!=null){const d=new Date(ld);d.setDate(d.getDate()+t.txDays);t.dueDate=d.toISOString().slice(0,10);}
   });
-  saveTmLaunch(launch);
-  document.querySelectorAll('details[data-lid]').forEach(d=>{if(d.open)_tmOpenCards.add(d.dataset.lid);else _tmOpenCards.delete(d.dataset.lid);});
+  saveTmLaunch(launch,li);
+  document.querySelectorAll('details[data-li]').forEach(d=>{if(d.open)_tmOpenCards.add(d.dataset.li);else _tmOpenCards.delete(d.dataset.li);});
   renderTMinus();
 }
 
@@ -4969,6 +4971,7 @@ function renderTMinus(){
   const past=sorted.filter(l=>l.launchDate&&new Date(l.launchDate+'T00:00:00')<today);
 
   function launchCard(l,isPast){
+    const li=tminusLaunches.indexOf(l);
     const tasks=toArr(l.tasks);
     const total=tasks.length;
     const done=tasks.filter(t=>t.done).length;
@@ -4976,7 +4979,7 @@ function renderTMinus(){
     const ld=l.launchDate?new Date(l.launchDate+'T00:00:00'):null;
     const daysUntil=ld?Math.round((ld-today)/(1000*60*60*24)):null;
     const urgentColor=daysUntil!==null&&daysUntil<=14&&!isPast?'#dc2626':daysUntil!==null&&daysUntil<=30&&!isPast?'#f59e0b':'#10b981';
-    const countdownStr=daysUntil===null?'':`T${daysUntil>=0?'-':'+'+(Math.abs(daysUntil)+'').replace('-','')}${Math.abs(daysUntil)}`;
+    const countdownStr=daysUntil===null?'':`T${daysUntil>=0?'-':'+'}${Math.abs(daysUntil)}`;
     // group tasks by txDays
     const groups={};
     tasks.forEach(t=>{const k=t.txDays||0;if(!groups[k])groups[k]=[];groups[k].push(t);});
@@ -4984,13 +4987,12 @@ function renderTMinus(){
     const groupHtml=groupKeys.map(k=>{
       const gTasks=groups[k];
       const label=k==0?'Launch Day':`T${k} (${Math.abs(k)} days before)`;
-      const allDone=gTasks.every(t=>t.done);
       return `<div style="margin-bottom:12px">
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#64748b;letter-spacing:.05em;margin-bottom:6px">${label}</div>
         ${gTasks.map(t=>`
-          <div data-lid="${l.id}" data-tid="${t.id}" style="border-radius:7px;background:${t.done?'#f0fdf4':'#f8fafc'};margin-bottom:4px">
+          <div data-li="${li}" data-tid="${t.id}" style="border-radius:7px;background:${t.done?'#f0fdf4':'#f8fafc'};margin-bottom:4px">
             <div style="display:flex;align-items:center;gap:10px;padding:7px 10px">
-              <div class="tm-cb" style="width:18px;height:18px;border-radius:50%;border:2px solid ${t.done?'#10b981':'#cbd5e1'};background:${t.done?'#10b981':'#fff'};flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer" onclick="toggleTmTask('${l.id}','${t.id}')">
+              <div class="tm-cb" style="width:18px;height:18px;border-radius:50%;border:2px solid ${t.done?'#10b981':'#cbd5e1'};background:${t.done?'#10b981':'#fff'};flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer" onclick="toggleTmTask(${li},'${t.id}')">
                 ${t.done?'<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>':''}
               </div>
               <div style="flex:1;min-width:0">
@@ -4998,7 +5000,7 @@ function renderTMinus(){
                 <span style="font-size:11px;color:#94a3b8;margin-left:6px">${t.dueDate?new Date(t.dueDate+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}):''}</span>
               </div>
               <span style="font-size:11px;color:#64748b;flex-shrink:0;background:#e2e8f0;border-radius:4px;padding:1px 6px">${escHtml(t.owner||'')}</span>
-              <button class="tm-note-btn" onclick="editTmTaskNote('${l.id}','${t.id}')" style="flex-shrink:0;background:${t.notes?'#eff6ff':'none'};border:1px solid ${t.notes?'#bfdbfe':'#e2e8f0'};border-radius:5px;cursor:pointer;padding:2px 8px;font-size:11px;color:${t.notes?'#2563eb':'#94a3b8'};white-space:nowrap">✎ ${t.notes?'Edit note':'Add note'}</button>
+              <button class="tm-note-btn" onclick="editTmTaskNote(${li},'${t.id}')" style="flex-shrink:0;background:${t.notes?'#eff6ff':'none'};border:1px solid ${t.notes?'#bfdbfe':'#e2e8f0'};border-radius:5px;cursor:pointer;padding:2px 8px;font-size:11px;color:${t.notes?'#2563eb':'#94a3b8'};white-space:nowrap">✎ ${t.notes?'Edit note':'Add note'}</button>
             </div>
             ${t.notes?`<div class="tm-note-disp" style="font-size:12px;color:#1e293b;padding:0 10px 8px 38px;line-height:1.5"><span style="background:#eff6ff;border-radius:4px;padding:3px 8px;display:inline-block">${escHtml(t.notes)}</span></div>`:'<div class="tm-note-disp" style="display:none"></div>'}
           </div>`).join('')}
@@ -5010,13 +5012,13 @@ function renderTMinus(){
         <div>
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
             <span style="font-size:16px;font-weight:700;color:#0f172a">${escHtml(l.doctorEvent)}</span>
-            <button onclick="changeLaunchType('${l.id}')" title="Click to change launch type" style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;cursor:pointer;border:none;${l.launchType==='hospital'?'background:#fef3c7;color:#92400e':'background:#ede9fe;color:#5b21b6'}">${l.launchType==='hospital'?'🏥 New Hospital Start':'🏠 New Office Setup'} ✎</button>
+            <button onclick="changeLaunchType(${li})" title="Click to change launch type" style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;cursor:pointer;border:none;${l.launchType==='hospital'?'background:#fef3c7;color:#92400e':'background:#ede9fe;color:#5b21b6'}">${l.launchType==='hospital'?'🏥 New Hospital Start':'🏠 New Office Setup'} ✎</button>
           </div>
           <div style="display:flex;align-items:center;gap:8px;margin-top:4px;flex-wrap:wrap">
             <span style="font-size:13px;color:#64748b">${escHtml(l.launchNote||'')}</span>
             <label style="position:relative;display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;color:#2563eb;background:#eff6ff;border:1px solid #bfdbfe;border-radius:5px;padding:2px 8px;cursor:pointer">
               📅 <span>${ld?ld.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}):'Set first shift date'}</span>
-              <input type="date" value="${l.launchDate||''}" onchange="updateLaunchDate('${l.id}',this.value)" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%">
+              <input type="date" value="${l.launchDate||''}" onchange="updateLaunchDate(${li},this.value)" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%">
             </label>
           </div>
           ${l.office?`<div style="font-size:12px;color:#94a3b8;margin-top:2px">📍 ${escHtml(l.office)}</div>`:''}
@@ -5027,10 +5029,10 @@ function renderTMinus(){
         </div>
       </div>
       <div style="margin-bottom:14px">
-        <div style="display:flex;justify-content:space-between;font-size:12px;color:#64748b;margin-bottom:4px"><span id="tm-prog-text-${l.id}">${done}/${total} tasks complete</span><span id="tm-prog-pct-${l.id}">${pct}%</span></div>
-        <div style="height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden"><div id="tm-prog-bar-${l.id}" style="height:100%;width:${pct}%;background:${pct===100?'#10b981':'#3b82f6'};border-radius:3px;transition:width .3s"></div></div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:#64748b;margin-bottom:4px"><span id="tm-prog-text-${li}">${done}/${total} tasks complete</span><span id="tm-prog-pct-${li}">${pct}%</span></div>
+        <div style="height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden"><div id="tm-prog-bar-${li}" style="height:100%;width:${pct}%;background:${pct===100?'#10b981':'#3b82f6'};border-radius:3px;transition:width .3s"></div></div>
       </div>
-      <details data-lid="${l.id}" style="cursor:pointer"><summary style="font-size:13px;color:#3b82f6;font-weight:500;list-style:none;user-select:none">▸ ${total} prep tasks</summary>
+      <details data-li="${li}" style="cursor:pointer"><summary style="font-size:13px;color:#3b82f6;font-weight:500;list-style:none;user-select:none">▸ ${total} prep tasks</summary>
         <div style="margin-top:12px">${groupHtml}</div>
       </details>
     </div>`;
@@ -5090,7 +5092,7 @@ function renderTMinus(){
       ${past.length?`<div style="margin-top:24px"><button onclick="const b=this.parentElement.querySelector('.past-launches-body');const shown=b.style.display!=='none';b.style.display=shown?'none':'block';this.textContent=shown?'▼ Show past launches (${past.length})':'▲ Hide past launches (${past.length})';" style="background:none;border:none;font-size:12px;font-weight:600;color:#94a3b8;cursor:pointer;padding:0;letter-spacing:.03em">▼ Show past launches (${past.length})</button><div class="past-launches-body" style="display:none;margin-top:12px">${past.map(l=>launchCard(l,true)).join('')}</div></div>`:''}
     </div>`;
   // restore open details panels
-  el.querySelectorAll('details[data-lid]').forEach(d=>{if(_tmOpenCards.has(d.dataset.lid))d.open=true;});
+  el.querySelectorAll('details[data-li]').forEach(d=>{if(_tmOpenCards.has(d.dataset.li))d.open=true;});
 }
 // ─── END T-MINUS ───────────────────────────────────────────────
 
